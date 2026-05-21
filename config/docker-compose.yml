@@ -1,0 +1,24 @@
+
+services:
+  icloudpd:
+    build:
+      context: ..
+      dockerfile: config/Dockerfile
+    container_name: icloudphotos
+    restart: unless-stopped
+    environment:
+      - ICLOUD_PASSWORD=${ICLOUD_PASSWORD}      # 通过环境变量传入，不写入文件
+      - TZ=${TZ:-Asia/Shanghai}
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro     # 配置文件，只读
+      - /path/to/photos:/data                    # 照片存储目录
+      - icloud_cookies:/config/cookies           # Cookie 持久化
+    healthcheck:
+      test: ["CMD", "/bin/bash", "/app/healthcheck.sh"]
+      interval: 300s
+      timeout: 30s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  icloud_cookies:

@@ -216,3 +216,36 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# === 项目特定 ===
+# 用户配置文件（含敏感信息）
+config/config.yaml
+
+# iCloud session cookies
+cookies/
+*.cookie
+
+# 临时下载文件
+/tmp/
+
+# 密钥文件
+*.key
+*.pem
+*.secret
+*.crt
+
+# Docker volumes
+/data/
+
+# 本地开发依赖（Docker 构建时从源码拉取）
+libs/
+
+# Spec Kit / AI agent 工具链（本地开发工具）
+.agents/
+.specify/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

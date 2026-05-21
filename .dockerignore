@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Git
+.git/
+.gitignore
+
+# Tests
+tests/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# IDE
+.vscode/
+.idea/
+
+# Spec & AI agent tooling
+.specify/
+.agents/
+specs/
+
+# Local dev dependencies (not used in Docker build)
+libs/
+
+# Misc
+*.log
+.env*
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+
+# Config (except template)
+config/config.yaml
+config/*.env

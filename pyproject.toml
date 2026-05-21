@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "icloud_docker"
+version = "0.1.0"
+description = "Docker-based iCloud photo downloader"
+requires-python = ">=3.11"
+dependencies = [
+    "icloudpd",
+    "requests==2.32.3",
+    "python-telegram-bot>=20.0",
+    "PyYAML>=6.0",
+    "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+pipeline = [
+    "pillow-heif>=0.13.0",  # Required for HEIC→JPG conversion
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "libs/icloud_photos_downloader/src"]
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "integration: integration tests requiring network or real iCloud account",
+    "slow: slow tests",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

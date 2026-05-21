@@ -1,0 +1,66 @@
+# iCloud 照片下载器 — 配置文件模板
+# 重命名为 config.yaml 并填入实际值
+
+# === 必填项 ===
+apple_id: "user@example.com"        # iCloud Apple ID
+
+# === 存储路径 ===
+download_path: "/data/photos"       # 照片下载目录
+folder_structure: "YYYY/MM"         # YYYY/MM | YYYY-MM-DD | album | none
+
+# === 同步设置 ===
+download_interval: 86400            # 同步周期间隔(秒)
+download_delay: 0                   # 每次下载间延迟(秒)，0=无延迟
+retry_interval: 120                 # 失败重试等待(秒)
+retry_count: 3                      # 单文件最大重试次数
+file_permissions: "644"             # 644 | 600 | 640 | 660 | 664 | 666
+directory_permissions: "755"
+keep_unicode: true
+set_exif_datetime: true
+file_match_policy: "name"           # name | size | checksum
+
+# === 删除策略 ===
+delete_policy: "keep"               # keep | delete | trash
+trash_days: 30
+
+# === 中国区设置 ===
+icloud_china: false
+auth_china: false
+
+# === Cookie 与认证 ===
+notification_days: 7                # Cookie 过期前 N 天开始提醒
+cookie_dir: "/config/cookies"       # Cookie 持久化目录
+
+# === 通知配置 ===
+notification:
+  telegram:
+    enabled: false
+    bot_token: ""
+    chat_id: ""
+    polling_interval: 5
+  webhook:
+    enabled: false
+    url: ""
+    method: "POST"
+    headers: {}
+  events:
+    - start
+    - complete
+    - error
+    - auth_expired
+    - low_space
+    - rate_limited
+
+# === 后置处理流水线 ===
+pipeline:
+  steps: []
+  # 示例：HEIC 转 JPG
+  # steps:
+  #   - name: heic_convert
+  #     config:
+  #       quality: 85
+  #       remove_original: false
+
+# === 高级设置 ===
+log_level: "info"
+debug_logging: false
