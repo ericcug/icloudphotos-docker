@@ -109,7 +109,7 @@ class Config:
 
 
 # Valid folder structure options
-VALID_FOLDER_STRUCTURES = {"YYYY/MM", "YYYY-MM-DD", "album", "none"}
+VALID_FOLDER_STRUCTURES = {"YYYY/MM", "YYYY/MM/DD", "YYYY-MM-DD", "album", "none"}
 
 # Valid file permissions
 VALID_FILE_PERMISSIONS = {"600", "640", "644", "660", "664", "666"}

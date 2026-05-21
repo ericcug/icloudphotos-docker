@@ -183,6 +183,8 @@ class MetadataDiffer:
             created = datetime.fromisoformat(created_str)
             if self.folder_structure == "YYYY/MM":
                 subdir = created.strftime("%Y/%m")
+            elif self.folder_structure == "YYYY/MM/DD":
+                subdir = created.strftime("%Y/%m/%d")
             elif self.folder_structure == "YYYY-MM-DD":
                 subdir = created.strftime("%Y-%m-%d")
             elif self.folder_structure == "album":
