@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS builder
 
 # 构建参数：icloud_photos_downloader 仓库与分支
 ARG ICLOUDPD_REPO=https://github.com/ericcug/icloud_photos_downloader.git
@@ -8,9 +8,9 @@ ARG ICLOUDPD_REF=master
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
-# 创建非 root 用户
-RUN groupadd -g 1000 icloud && \
-    useradd -u 1000 -g icloud -m -s /bin/bash icloud
+# 创建虚拟环境，隔离依赖
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # 从 Git 拉取并安装 icloud_photos_downloader
 RUN git clone --depth 1 --branch "${ICLOUDPD_REF}" "${ICLOUDPD_REPO}" /tmp/icloudpd_src \
@@ -24,8 +24,17 @@ RUN pip install --no-cache-dir \
     "PyYAML>=6.0" \
     "pillow>=10.0"
 
-# 清理构建期工具
-RUN apt-get purge -y git && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+# --- 最终运行镜像 ---
+FROM python:3.11-slim
+
+# 创建非 root 用户
+RUN groupadd -g 1000 icloud && \
+    useradd -u 1000 -g icloud -m -s /bin/bash icloud
+
+# 从 builder 阶段复制虚拟环境
+COPY --from=builder /opt/venv /opt/venv
+# 启用虚拟环境
+ENV PATH="/opt/venv/bin:$PATH"
 
 # 创建运行时目录
 RUN mkdir -p /config /data /tmp/icloudpd && \
