@@ -69,7 +69,7 @@ You can configure the application using either a `config.yaml` file mounted to `
 | `ICLOUD_APPLE_ID` | `apple_id` | **Required.** Your iCloud Apple ID | |
 | `ICLOUD_PASSWORD` | N/A | **Required.** Your iCloud Password (Only available via Env Var for security) | |
 | `ICLOUD_DOWNLOAD_PATH` | `download_path` | The path where photos are saved inside the container | `/data` |
-| `ICLOUD_FOLDER_STRUCTURE` | `folder_structure` | Structure of downloaded folders (`YYYY/MM`, `YYYY-MM-DD`, `album`, `none`) | `YYYY/MM` |
+| `ICLOUD_FOLDER_STRUCTURE` | `folder_structure` | Structure of downloaded folders (`YYYY/MM`, `YYYY/MM/DD`, `YYYY-MM-DD`, `album`, `none`) | `YYYY/MM` |
 | `ICLOUD_DOWNLOAD_INTERVAL` | `download_interval` | Sync interval in seconds | `86400` (24h) |
 | `ICLOUD_DOWNLOAD_DELAY` | `download_delay` | Delay between downloading individual files in seconds | `0` |
 | `ICLOUD_RETRY_INTERVAL` | `retry_interval` | Wait time before retrying a failed download in seconds | `120` |
@@ -81,6 +81,8 @@ You can configure the application using either a `config.yaml` file mounted to `
 | `ICLOUD_FILE_MATCH_POLICY` | `file_match_policy` | Policy to determine if file already exists (`name`, `size`, `checksum`) | `name` |
 | `ICLOUD_DELETE_POLICY` | `delete_policy` | How to handle files deleted from iCloud (`keep`, `delete`, `trash`) | `keep` |
 | `ICLOUD_TRASH_DAYS` | `trash_days` | Number of days to keep files in trash before deleting (if policy is `trash`) | `30` |
+| `ICLOUD_DELETE_AFTER_DOWNLOAD` | `delete_after_download` | Safely move photo to "Recently Deleted" on iCloud after successful local download | `false` |
+| `ICLOUD_MAX_DELETIONS_PER_RUN` | `max_deletions_per_run` | Maximum number of iCloud deletions per sync cycle (to avoid Apple API throttling) | `100` |
 | `ICLOUD_CHINA` | `icloud_china` | Set to `true` if your iCloud account is in China | `false` |
 | `ICLOUD_AUTH_CHINA` | `auth_china` | Set to `true` to use China auth servers | `false` |
 | `ICLOUD_LOG_LEVEL` | `log_level` | Application log level (`debug`, `info`, `warning`, `error`) | `info` |

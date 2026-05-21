@@ -231,6 +231,8 @@ class SyncEngine:
 
         processed = 0
         failed = 0
+        deleted_count = 0
+        limit_reached_logged = False
 
         for diff in diffs:
             if self._pause_requested:
@@ -264,6 +266,18 @@ class SyncEngine:
                 if self._pipeline_runner:
                     self.state = SyncState.PROCESSING
                     self._pipeline_runner.process_file(result, diff.cloud_metadata)
+                
+                # Phase 5: Delete after download (if enabled)
+                if getattr(self.config, "delete_after_download", False):
+                    max_del = getattr(self.config, "max_deletions_per_run", 100)
+                    if deleted_count < max_del:
+                        if self.wrapper.delete_asset(photo_asset):
+                            deleted_count += 1
+                            if self.config.download_delay > 0:
+                                time.sleep(self.config.download_delay)
+                    elif not limit_reached_logged:
+                        logger.info("Max deletions per run (%d) reached. Skipping further deletions.", max_del)
+                        limit_reached_logged = True
             else:
                 failed += 1
 

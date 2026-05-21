@@ -87,6 +87,8 @@ class Config:
     # Delete policy
     delete_policy: str = "keep"
     trash_days: int = 30
+    delete_after_download: bool = False
+    max_deletions_per_run: int = 100
 
     # China region
     icloud_china: bool = False
@@ -142,6 +144,8 @@ ENV_VAR_MAP = {
     "ICLOUD_FILE_MATCH_POLICY": "file_match_policy",
     "ICLOUD_DELETE_POLICY": "delete_policy",
     "ICLOUD_TRASH_DAYS": "trash_days",
+    "ICLOUD_DELETE_AFTER_DOWNLOAD": "delete_after_download",
+    "ICLOUD_MAX_DELETIONS_PER_RUN": "max_deletions_per_run",
     "ICLOUD_CHINA": "icloud_china",
     "ICLOUD_AUTH_CHINA": "auth_china",
     "ICLOUD_LOG_LEVEL": "log_level",

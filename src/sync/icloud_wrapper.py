@@ -124,3 +124,26 @@ class ICloudWrapper:
         if getattr(asset, "is_live_photo", False):
             return "live_photo"
         return "photo"
+
+    def delete_asset(self, asset: PhotoAsset) -> bool:
+        """Delete an asset from iCloud (moves to Recently Deleted).
+
+        Args:
+            asset: PhotoAsset to delete.
+
+        Returns:
+            True if deletion was successful, False otherwise.
+        """
+        try:
+            # The PhotoAsset class in pyicloud provides a delete method
+            # which moves the item to the "Recently Deleted" album.
+            if hasattr(asset, 'delete'):
+                asset.delete()
+                logger.info("Successfully deleted asset %s from iCloud", asset.filename)
+                return True
+            else:
+                logger.error("Asset %s does not have a delete method", asset.filename)
+                return False
+        except Exception as e:
+            logger.error("Failed to delete asset %s from iCloud: %s", asset.filename, e)
+            return False
