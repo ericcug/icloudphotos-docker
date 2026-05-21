@@ -119,6 +119,21 @@ def main() -> None:
     )
     auth_manager = AuthManager(config, cookie_store, mfa_provider)
 
+    # Phase 6 (US4): Telegram Bot controller (Initialize early for MFA)
+    from control.telegram_bot import TelegramController
+    from control.file_watch import FileCommandWatcher
+
+    telegram_ctrl = TelegramController(
+        bot_token=config.notification.telegram.bot_token,
+        chat_id=config.notification.telegram.chat_id,
+        engine=None,  # Will attach later
+        mfa_provider=mfa_provider,
+        polling_interval=config.notification.telegram.polling_interval,
+    )
+    if telegram_ctrl.enabled:
+        telegram_ctrl.start()
+        logger.info("Telegram remote control enabled (Listening for MFA...)")
+
     # Authenticate with iCloud
     if not password:
         logger.error("ICLOUD_PASSWORD environment variable is required")
@@ -130,12 +145,15 @@ def main() -> None:
     except Exception as e:
         logger.error("Authentication failed: %s", e)
         logger.error("Check your Apple ID and password.")
+        if telegram_ctrl.enabled:
+            telegram_ctrl.stop()
         sys.exit(1)
 
     # Sync engine
     wrapper = ICloudWrapper(service)
     engine = SyncEngine(config, wrapper)
     engine.set_auth_manager(auth_manager)
+    telegram_ctrl.engine = engine  # Attach engine to controller
 
     # Phase 4 (US2): Pipeline runner
     from pipeline.runner import PipelineRunner
@@ -171,21 +189,7 @@ def main() -> None:
             event_bus.subscribe(etype, wh_notifier.send)
         logger.info("Webhook notifications enabled")
 
-    # Phase 6 (US4): Telegram Bot controller
-    from control.telegram_bot import TelegramController
-    from control.file_watch import FileCommandWatcher
-
-    telegram_ctrl = TelegramController(
-        bot_token=config.notification.telegram.bot_token,
-        chat_id=config.notification.telegram.chat_id,
-        engine=engine,
-        mfa_provider=mfa_provider,
-        polling_interval=config.notification.telegram.polling_interval,
-    )
-    if telegram_ctrl.enabled:
-        telegram_ctrl.start()
-        logger.info("Telegram remote control enabled")
-    else:
+    if not telegram_ctrl.enabled:
         # File-based fallback
         file_watcher = FileCommandWatcher(
             command_file=config.temp_dir / "commands.txt",
