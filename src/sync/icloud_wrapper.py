@@ -99,17 +99,17 @@ class ICloudWrapper:
             Dictionary with standardized metadata fields.
         """
         return {
-            "record_name": getattr(asset, "id", ""),
-            "filename": getattr(asset, "filename", ""),
+            "record_name": asset.id,
+            "filename": asset.filename,
             "media_type": self._detect_media_type(asset),
-            "size_bytes": getattr(asset, "size", 0),
-            "created_at": str(getattr(asset, "created", "")),
-            "modified_at": str(getattr(asset, "modified", "")),
+            "size_bytes": asset.size,
+            "created_at": str(asset.created),
+            "modified_at": str(asset.added_date),
         }
 
     @staticmethod
     def _detect_media_type(asset: PhotoAsset) -> str:
-        """Detect media type from asset filename extension.
+        """Detect media type from asset filename extension and versions.
 
         Args:
             asset: PhotoAsset instance.
@@ -117,12 +117,17 @@ class ICloudWrapper:
         Returns:
             One of: photo, video, live_photo.
         """
-        filename = str(getattr(asset, "filename", "")).lower()
+        from pyicloud_ipd.version_size import LivePhotoVersionSize
+        
+        filename = str(asset.filename).lower()
+        
+        # Live photos have both .heic + .mov pair
+        if LivePhotoVersionSize.ORIGINAL in asset.versions:
+            return "live_photo"
+            
         if filename.endswith((".mov", ".mp4", ".m4v", ".avi")):
             return "video"
-        # Live photos have both .heic + .mov pair
-        if getattr(asset, "is_live_photo", False):
-            return "live_photo"
+            
         return "photo"
 
     def delete_asset(self, asset: PhotoAsset) -> bool:
