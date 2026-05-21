@@ -15,8 +15,8 @@ from pyicloud_ipd.exceptions import (
 )
 from pyicloud_ipd.sms import TrustedDevice
 
-from icloud_docker.auth.cookie_store import CookieStore
-from icloud_docker.auth.mfa import TelegramMFAProvider
+from auth.cookie_store import CookieStore
+from auth.mfa import TelegramMFAProvider
 
 logger = logging.getLogger(__name__)
 
@@ -373,7 +373,7 @@ class AuthManager:
         Returns:
             CookieExpiryInfo with expiry details.
         """
-        from icloud_docker.auth.cookie_store import CookieExpiryInfo
+        from auth.cookie_store import CookieExpiryInfo
 
         details = self.cookie_store.get_expiry_details(self.config.apple_id)
 

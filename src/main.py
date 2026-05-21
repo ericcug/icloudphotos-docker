@@ -16,7 +16,7 @@ import argparse
 import os
 import logging
 
-from icloud_docker import setup_logging
+from logger import setup_logging
 
 logger = None  # Set after config loaded
 
@@ -59,7 +59,7 @@ def main() -> None:
     # Early logging setup (level will be refined after config load)
     logger = setup_logging(level="info", debug=False)
 
-    from icloud_docker.config.loader import ConfigError, load_config
+    from config.loader import ConfigError, load_config
 
     # Get password from environment (never from config file)
     password = os.environ.get("ICLOUD_PASSWORD", "")
@@ -82,7 +82,7 @@ def main() -> None:
     logger.info("=" * 50)
     logger.info("iCloud Photo Downloader starting")
     logger.info("Config: %s", args.config)
-    from icloud_docker.config.loader import _mask
+    from config.loader import _mask
     logger.info("Apple ID: %s", _mask(config.apple_id))
     logger.info("Download path: %s", config.download_path)
     logger.info("Sync interval: %ds", config.download_interval)
@@ -91,11 +91,11 @@ def main() -> None:
     logger.info("=" * 50)
 
     # Phase 3 (US1): Initialize auth and sync engine
-    from icloud_docker.auth.cookie_store import CookieStore
-    from icloud_docker.auth.mfa import TelegramMFAProvider
-    from icloud_docker.auth.session import AuthManager
-    from icloud_docker.sync.icloud_wrapper import ICloudWrapper
-    from icloud_docker.sync.engine import SyncEngine
+    from auth.cookie_store import CookieStore
+    from auth.mfa import TelegramMFAProvider
+    from auth.session import AuthManager
+    from sync.icloud_wrapper import ICloudWrapper
+    from sync.engine import SyncEngine
 
     # Auth subsystem
     cookie_store = CookieStore(cookie_dir=config.cookie_dir)
@@ -124,16 +124,16 @@ def main() -> None:
     engine.set_auth_manager(auth_manager)
 
     # Phase 4 (US2): Pipeline runner
-    from icloud_docker.pipeline.runner import PipelineRunner
+    from pipeline.runner import PipelineRunner
     pipeline_runner = PipelineRunner(config.pipeline)
     if not pipeline_runner.is_empty:
         engine.set_pipeline_runner(pipeline_runner)
         logger.info("Pipeline runner loaded (%d steps)", len(pipeline_runner.steps))
 
     # Phase 5 (US3): Event bus + notification channels
-    from icloud_docker.notify.bus import EventBus
-    from icloud_docker.notify.channels.telegram import TelegramNotifier
-    from icloud_docker.notify.channels.webhook import WebhookNotifier
+    from notify.bus import EventBus
+    from notify.channels.telegram import TelegramNotifier
+    from notify.channels.webhook import WebhookNotifier
 
     event_bus = EventBus(subscribed_events=config.notification.events)
     engine.set_event_bus(event_bus)
@@ -158,8 +158,8 @@ def main() -> None:
         logger.info("Webhook notifications enabled")
 
     # Phase 6 (US4): Telegram Bot controller
-    from icloud_docker.control.telegram_bot import TelegramController
-    from icloud_docker.control.file_watch import FileCommandWatcher
+    from control.telegram_bot import TelegramController
+    from control.file_watch import FileCommandWatcher
 
     telegram_ctrl = TelegramController(
         bot_token=config.notification.telegram.bot_token,

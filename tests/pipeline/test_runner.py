@@ -5,9 +5,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from icloud_docker.pipeline.base import BaseProcessor, ProcessorError
-from icloud_docker.pipeline.runner import PipelineRunner
-from icloud_docker.config.schema import PipelineConfig, PipelineStepConfig
+from pipeline.base import BaseProcessor, ProcessorError
+from pipeline.runner import PipelineRunner
+from config.schema import PipelineConfig, PipelineStepConfig
 
 
 class MockProcessor(BaseProcessor):
@@ -79,7 +79,7 @@ class TestPipelineRunner:
         result = runner.process_file(test_file, {"filename": "test.jpg"})
         assert result.suffix == ".jpg"  # HEIC converter skips non-HEIC
 
-    @patch("icloud_docker.pipeline.runner.importlib.import_module")
+    @patch("pipeline.runner.importlib.import_module")
     def test_load_builtin_processor(self, mock_import, tmp_path):
         """Verify built-in processor loading."""
         mock_module = MagicMock()

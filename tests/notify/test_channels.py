@@ -2,9 +2,9 @@
 
 from unittest.mock import MagicMock, patch
 
-from icloud_docker.notify.bus import EventType, SystemEvent
-from icloud_docker.notify.channels.telegram import TelegramNotifier
-from icloud_docker.notify.channels.webhook import WebhookNotifier
+from notify.bus import EventType, SystemEvent
+from notify.channels.telegram import TelegramNotifier
+from notify.channels.webhook import WebhookNotifier
 
 
 class TestTelegramNotifier:
@@ -18,7 +18,7 @@ class TestTelegramNotifier:
         notifier = TelegramNotifier("token123", "chat456")
         assert notifier.enabled is True
 
-    @patch("icloud_docker.notify.channels.telegram.requests.post")
+    @patch("notify.channels.telegram.requests.post")
     def test_send_success(self, mock_post):
         mock_post.return_value.status_code = 200
         notifier = TelegramNotifier("token", "chat")
@@ -28,7 +28,7 @@ class TestTelegramNotifier:
         assert result is True
         mock_post.assert_called_once()
 
-    @patch("icloud_docker.notify.channels.telegram.requests.post")
+    @patch("notify.channels.telegram.requests.post")
     def test_send_failure(self, mock_post):
         mock_post.return_value.status_code = 500
         notifier = TelegramNotifier("token", "chat")
@@ -60,7 +60,7 @@ class TestWebhookNotifier:
         notifier = WebhookNotifier("https://hooks.example.com/webhook")
         assert notifier.enabled is True
 
-    @patch("icloud_docker.notify.channels.webhook.requests.request")
+    @patch("notify.channels.webhook.requests.request")
     def test_send_success(self, mock_request):
         mock_request.return_value.status_code = 200
         notifier = WebhookNotifier("https://hooks.example.com/webhook")
@@ -69,7 +69,7 @@ class TestWebhookNotifier:
         result = notifier.send(event)
         assert result is True
 
-    @patch("icloud_docker.notify.channels.webhook.requests.request")
+    @patch("notify.channels.webhook.requests.request")
     def test_send_failure(self, mock_request):
         mock_request.return_value.status_code = 500
         notifier = WebhookNotifier("https://hooks.example.com/webhook")

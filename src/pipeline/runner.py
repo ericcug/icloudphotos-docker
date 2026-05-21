@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from icloud_docker.pipeline.base import BaseProcessor, ProcessorError
+from pipeline.base import BaseProcessor, ProcessorError
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class PipelineRunner:
 
     # Built-in processors by name
     BUILTIN_PROCESSORS = {
-        "heic_convert": "icloud_docker.pipeline.builtin.heic_convert.HeicToJpgProcessor",
+        "heic_convert": "pipeline.builtin.heic_convert.HeicToJpgProcessor",
     }
 
     def __init__(self, pipeline_config):

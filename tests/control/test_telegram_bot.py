@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from icloud_docker.control.telegram_bot import TelegramController
+from control.telegram_bot import TelegramController
 from enum import Enum
 
 
@@ -17,7 +17,7 @@ class SyncState(Enum):
 class TestTelegramController:
     """Test Telegram Bot command handling."""
 
-    @patch("icloud_docker.control.telegram_bot.requests.get")
+    @patch("control.telegram_bot.requests.get")
     def test_poll_loop_processes_updates(self, mock_get):
         """Verify update polling calls Telegram API."""
         mock_get.return_value.json.return_value = {"ok": True, "result": []}
@@ -31,8 +31,8 @@ class TestTelegramController:
         ctrl._check_updates()
         mock_get.assert_called_once()
 
-    @patch("icloud_docker.control.telegram_bot.requests.post")
-    @patch("icloud_docker.control.telegram_bot.requests.get")
+    @patch("control.telegram_bot.requests.post")
+    @patch("control.telegram_bot.requests.get")
     def test_pause_command(self, mock_get, mock_post):
         """Verify /pause command pauses engine."""
         mock_get.return_value.json.return_value = {
@@ -56,8 +56,8 @@ class TestTelegramController:
 
         engine.pause.assert_called_once()
 
-    @patch("icloud_docker.control.telegram_bot.requests.post")
-    @patch("icloud_docker.control.telegram_bot.requests.get")
+    @patch("control.telegram_bot.requests.post")
+    @patch("control.telegram_bot.requests.get")
     def test_resume_command(self, mock_get, mock_post):
         """Verify /resume command resumes engine."""
         mock_get.return_value.json.return_value = {
@@ -81,8 +81,8 @@ class TestTelegramController:
 
         engine.resume.assert_called_once()
 
-    @patch("icloud_docker.control.telegram_bot.requests.post")
-    @patch("icloud_docker.control.telegram_bot.requests.get")
+    @patch("control.telegram_bot.requests.post")
+    @patch("control.telegram_bot.requests.get")
     def test_sync_command(self, mock_get, mock_post):
         """Verify /sync command triggers immediate sync."""
         mock_get.return_value.json.return_value = {
@@ -104,8 +104,8 @@ class TestTelegramController:
 
         engine.sync_now.assert_called_once()
 
-    @patch("icloud_docker.control.telegram_bot.requests.post")
-    @patch("icloud_docker.control.telegram_bot.requests.get")
+    @patch("control.telegram_bot.requests.post")
+    @patch("control.telegram_bot.requests.get")
     def test_status_command(self, mock_get, mock_post):
         """Verify /status command reports state."""
         mock_get.return_value.json.return_value = {
@@ -140,8 +140,8 @@ class TestTelegramController:
         ctrl = TelegramController("token", "chat123")
         assert ctrl.enabled is True
 
-    @patch("icloud_docker.control.telegram_bot.requests.post")
-    @patch("icloud_docker.control.telegram_bot.requests.get")
+    @patch("control.telegram_bot.requests.post")
+    @patch("control.telegram_bot.requests.get")
     def test_mfa_code_detection(self, mock_get, mock_post):
         """Verify 6-digit code is detected as MFA."""
         mock_get.return_value.json.return_value = {
@@ -164,7 +164,7 @@ class TestTelegramController:
 
         mfa_provider.provide_code.assert_called_once_with("123456")
 
-    @patch("icloud_docker.control.telegram_bot.requests.get")
+    @patch("control.telegram_bot.requests.get")
     def test_unauthorized_chat_ignored(self, mock_get):
         """Verify messages from unauthorized chats are ignored (FR-023)."""
         mock_get.return_value.json.return_value = {

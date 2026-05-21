@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from icloud_docker.control.file_watch import FileCommandWatcher
+from control.file_watch import FileCommandWatcher
 
 
 class TestFileCommandWatcher:

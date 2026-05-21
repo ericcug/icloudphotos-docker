@@ -72,4 +72,4 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         Logger instance under the icloud_docker namespace.
     """
-    return logging.getLogger(f"icloud_docker.{name}")
+    return logging.getLogger(f"{name}")

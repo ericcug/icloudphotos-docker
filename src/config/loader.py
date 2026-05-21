@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 import yaml
 
-from icloud_docker.config.schema import (
+from config.schema import (
     VALID_DELETE_POLICIES,
     VALID_FILE_MATCH_POLICIES,
     VALID_FILE_PERMISSIONS,

@@ -2,8 +2,8 @@
 
 import pytest
 
-from icloud_docker.config.loader import ConfigError, load_config
-from icloud_docker.config.schema import Config
+from config.loader import ConfigError, load_config
+from config.schema import Config
 
 
 @pytest.mark.integration
@@ -40,7 +40,7 @@ class TestEndToEnd:
         import logging
         import io
 
-        from icloud_docker import PasswordFormatter
+        from logger import PasswordFormatter
 
         log_stream = io.StringIO()
         handler = logging.StreamHandler(log_stream)

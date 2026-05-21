@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from icloud_docker.pipeline.base import ProcessorError
-from icloud_docker.pipeline.builtin.heic_convert import HeicToJpgProcessor
+from pipeline.base import ProcessorError
+from pipeline.builtin.heic_convert import HeicToJpgProcessor
 
 
 class TestHeicToJpgProcessor:

@@ -12,4 +12,4 @@ if [ -f /config/config.yaml ]; then
 fi
 
 # 启动 Python 主程序
-exec python -m icloud_docker.main --config "${ICLOUD_CONFIG:-/config/config.yaml}"
+exec python -m main --config "${ICLOUD_CONFIG:-/config/config.yaml}"

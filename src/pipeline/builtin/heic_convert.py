@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
-from icloud_docker.pipeline.base import BaseProcessor, ProcessorError
+from pipeline.base import BaseProcessor, ProcessorError
 
 logger = logging.getLogger(__name__)
 

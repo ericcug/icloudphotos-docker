@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from icloud_docker.config.loader import ConfigError, load_config
-from icloud_docker.config.schema import Config
+from config.loader import ConfigError, load_config
+from config.schema import Config
 
 
 def _write_config(tmpdir: Path, data: dict) -> Path:

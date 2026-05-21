@@ -5,7 +5,7 @@ from typing import Optional
 
 import requests
 
-from icloud_docker.notify.bus import SystemEvent
+from notify.bus import SystemEvent
 
 logger = logging.getLogger(__name__)
 

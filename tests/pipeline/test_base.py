@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from icloud_docker.pipeline.base import BaseProcessor, ProcessorError
+from pipeline.base import BaseProcessor, ProcessorError
 
 
 class TestBaseProcessor:

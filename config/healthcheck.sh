@@ -26,7 +26,7 @@ if [ "$cookie_count" -eq 0 ]; then
 fi
 
 # Check if sync process is running
-if ! pgrep -f "python -m icloud_docker" > /dev/null 2>&1; then
+if ! pgrep -f "python -m main" > /dev/null 2>&1; then
     echo "Sync process not running"
     exit 1
 fi

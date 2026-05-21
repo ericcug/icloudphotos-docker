@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from icloud_docker.notify.bus import EventBus, EventType, SystemEvent
+from notify.bus import EventBus, EventType, SystemEvent
 
 
 class TestEventBus:

@@ -29,5 +29,3 @@ markers = [
     "slow: slow tests",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]

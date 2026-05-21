@@ -12,10 +12,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, Optional
 
-from icloud_docker.notify.bus import EventType, SystemEvent
-from icloud_docker.sync.differ import AssetDiff, MetadataDiffer
-from icloud_docker.sync.downloader import Downloader
-from icloud_docker.sync.icloud_wrapper import ICloudWrapper
+from notify.bus import EventType, SystemEvent
+from sync.differ import AssetDiff, MetadataDiffer
+from sync.downloader import Downloader
+from sync.icloud_wrapper import ICloudWrapper
 
 logger = logging.getLogger(__name__)
 
