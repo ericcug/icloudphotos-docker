@@ -132,18 +132,10 @@ class AuthManager:
                         icloud.is_trusted_session)
             if icloud.requires_2fa:
                 logger.info("Two-factor authentication required (2FA)")
-                self.mfa_provider.send_prompt(
-                    "iCloud requires two-factor authentication.\n"
-                    "Check your trusted Apple device for the 6‑digit code."
-                )
                 self._handle_2fa(icloud)
 
             elif icloud.requires_2sa:
                 logger.info("Two-step authentication required (2SA)")
-                self.mfa_provider.send_prompt(
-                    "iCloud requires two-step authentication.\n"
-                    "An SMS code will be sent to your trusted device."
-                )
                 self._handle_2sa(icloud)
 
             self._service = icloud
@@ -267,6 +259,10 @@ class AuthManager:
 
     def _handle_2fa_direct(self, icloud: PyiCloudService) -> None:
         """2FA without trusted phone numbers — push code only."""
+        self.mfa_provider.send_prompt(
+            "iCloud requires two-factor authentication.\n"
+            "Please reply with the 6‑digit code from your trusted Apple device."
+        )
         while True:
             code = self.mfa_provider.wait_for_code()
 
@@ -311,6 +307,7 @@ class AuthManager:
                 device_lines.append(f"  {i}: {name}")
 
             self.mfa_provider.send_prompt(
+                "iCloud requires two-step authentication.\n"
                 "Select a device for SMS code:\n" + "\n".join(device_lines)
             )
             while True:
@@ -334,7 +331,11 @@ class AuthManager:
             raise PyiCloudFailedMFAException("Failed to send verification code")
 
         self.mfa_provider.reset()
-        self.mfa_provider.send_prompt("Enter the verification code sent to your device.")
+        self.mfa_provider.send_prompt(
+            f"iCloud requires two-step authentication.\n"
+            f"An SMS code was sent to {device.get('deviceName', 'unknown')}.\n"
+            f"Please reply with the verification code."
+        )
         code = self.mfa_provider.wait_for_code()
 
         if not icloud.validate_verification_code(device, code):

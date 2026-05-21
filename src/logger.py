@@ -32,7 +32,7 @@ def setup_logging(level: str = "info", debug: bool = False) -> logging.Logger:
         datefmt="%Y-%m-%d %H:%M:%S",
     ))
 
-    root_logger = logging.getLogger("icloud_docker")
+    root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
     root_logger.handlers.clear()
     root_logger.addHandler(handler)

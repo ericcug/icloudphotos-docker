@@ -76,7 +76,8 @@ class CookieStore:
         Returns:
             Path to the cookie file.
         """
-        safe_name = "".join(c for c in apple_id if c.isalnum() or c in "_-@.").lower()
+        # Match pyicloud's exact behavior: strip everything except alphanumeric
+        safe_name = "".join(c for c in apple_id if c.isalnum()).lower()
         return self.cookie_dir / safe_name
 
     def save_cookie(self, apple_id: str, cookie_content: str) -> None:

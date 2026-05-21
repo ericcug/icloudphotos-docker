@@ -78,13 +78,23 @@ class MetadataDiffer:
         if local_index is None:
             local_index = self._build_local_index()
 
-        cloud_keys = {a["record_name"] for a in cloud_assets}
         diffs = []
+        cloud_lookup_keys = set()
 
         # Check each cloud asset against local files
         for asset in cloud_assets:
             record_name = asset["record_name"]
-            local_path = local_index.get(record_name)
+            
+            # Determine lookup key based on file match policy
+            if self.file_match_policy == "name":
+                target_path = self.get_target_path(asset)
+                rel_path = target_path.relative_to(self.download_path)
+                lookup_key = rel_path.with_suffix('').as_posix()
+            else:
+                lookup_key = record_name
+                
+            cloud_lookup_keys.add(lookup_key)
+            local_path = local_index.get(lookup_key)
 
             if local_path is None:
                 diffs.append(AssetDiff(record_name, "new", asset))
@@ -96,10 +106,11 @@ class MetadataDiffer:
         # Handle remotely deleted files
         if self.delete_policy != "keep":
             local_keys = set(local_index.keys())
-            deleted_keys = local_keys - cloud_keys
+            deleted_keys = local_keys - cloud_lookup_keys
             if deleted_keys:
                 logger.info("Found %d remotely deleted assets (policy=%s)", len(deleted_keys), self.delete_policy)
                 for key in deleted_keys:
+                    # For deleted items, the key is the lookup key (filename or record_name)
                     diffs.append(AssetDiff(
                         key, "deleted_remotely",
                         {"record_name": key},
@@ -135,8 +146,9 @@ class MetadataDiffer:
                 filepath = Path(root) / filename
                 # Simple name-based matching (can be extended for checksum)
                 if self.file_match_policy == "name":
-                    # Use filename sans extension as record key
-                    key = filepath.stem
+                    # Use relative path sans extension as record key to include date folders
+                    rel_path = filepath.relative_to(self.download_path)
+                    key = rel_path.with_suffix('').as_posix()
                     index[key] = filepath
                 # Future: size/checksum matching
 
