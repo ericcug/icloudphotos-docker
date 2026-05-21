@@ -40,11 +40,11 @@ class TestEndToEnd:
         import logging
         import io
 
-        from icloud_docker import PasswordFilter
+        from icloud_docker import PasswordFormatter
 
         log_stream = io.StringIO()
         handler = logging.StreamHandler(log_stream)
-        handler.addFilter(PasswordFilter())
+        handler.setFormatter(PasswordFormatter("%(message)s"))
 
         logger = logging.getLogger("test_password_filter")
         logger.addHandler(handler)

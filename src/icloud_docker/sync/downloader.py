@@ -136,10 +136,15 @@ class Downloader:
 
         try:
             from icloudpd.download import download_media
-            from pyicloud_ipd.version_size import VersionSize
+            from pyicloud_ipd.version_size import AssetVersionSize, LivePhotoVersionSize
 
             versions = asset.versions
-            original = versions.get(VersionSize.ORIGINAL)
+            original = versions.get(AssetVersionSize.ORIGINAL)
+            original_size = AssetVersionSize.ORIGINAL
+            if not original:
+                original = versions.get(LivePhotoVersionSize.ORIGINAL)
+                original_size = LivePhotoVersionSize.ORIGINAL
+
             if not original:
                 logger.warning("No original version available for %s", asset.filename)
                 return None
@@ -152,7 +157,7 @@ class Downloader:
                 photo=asset,
                 download_path=str(target_path),
                 version=original,
-                size=VersionSize.ORIGINAL,
+                size=original_size,
                 filename_builder=lambda a: a.filename,
             )
 
