@@ -103,8 +103,8 @@ class Config:
     log_level: str = "info"
     debug_logging: bool = False
 
-    # Derived paths (not configurable via YAML)
-    cookie_dir: Path = Path("./data/cookies")
+    # Derived paths (not configurable via YAML, defaults to config file directory / cookies)
+    cookie_dir: Path = Path("./cookies")
     temp_dir: Path = Path("/tmp/icloudpd")
 
 

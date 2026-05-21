@@ -65,6 +65,20 @@ def main() -> None:
     password = os.environ.get("ICLOUD_PASSWORD", "")
 
     try:
+        if not args.config.exists():
+            # Try to find config.example.yaml relative to main.py
+            example_path = Path(__file__).resolve().parent.parent / "config" / "config.example.yaml"
+            if example_path.exists():
+                import shutil
+                args.config.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(example_path, args.config)
+                print(f"INFO: Created default config file at {args.config}", file=sys.stderr)
+                print("Please edit it and restart the container.", file=sys.stderr)
+                sys.exit(1)
+            else:
+                print(f"ERROR: Config file not found at {args.config} and no example found.", file=sys.stderr)
+                sys.exit(1)
+
         config = load_config(args.config, password=password or None)
     except FileNotFoundError as e:
         print(f"ERROR: {e}", file=sys.stderr)

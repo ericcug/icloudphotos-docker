@@ -58,7 +58,7 @@ def load_config(config_path: Path, password: Optional[str] = None) -> Config:
     _apply_env_overrides(raw)
 
     # Build Config from raw dict
-    config = _build_config(raw, password)
+    config = _build_config(raw, password, config_path)
 
     # Validate
     _validate(config)
@@ -136,7 +136,7 @@ _SCHEMA_TYPE_HINTS: Dict[str, Any] = {
 }
 
 
-def _build_config(raw: Dict[str, Any], password: Optional[str]) -> Config:
+def _build_config(raw: Dict[str, Any], password: Optional[str], config_path: Path) -> Config:
     """Build Config dataclass from raw dict."""
     # Notification
     notif_raw = raw.get("notification", {})
@@ -175,7 +175,7 @@ def _build_config(raw: Dict[str, Any], password: Optional[str]) -> Config:
     if cookie_dir_val:
         cookie_dir = Path(cookie_dir_val)
     else:
-        cookie_dir = Path("./data/cookies")
+        cookie_dir = config_path.parent / "cookies"
 
     return Config(
         apple_id=raw.get("apple_id", ""),
