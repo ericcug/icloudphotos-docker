@@ -134,15 +134,43 @@ class ICloudWrapper:
         Returns:
             True if deletion was successful, False otherwise.
         """
+        import urllib.parse
+        import json
+        
         try:
-            # The PhotoAsset class in pyicloud provides a delete method
-            # which moves the item to the "Recently Deleted" album.
-            if hasattr(asset, 'delete'):
-                asset.delete()
+            library_object = self.service.photos
+            logger.debug("Deleting %s in iCloud...", asset.filename)
+            url = (
+                f"{library_object.service_endpoint}/records/modify?"
+                f"{urllib.parse.urlencode(library_object.params)}"
+            )
+            post_data = json.dumps(
+                {
+                    "atomic": True,
+                    "desiredKeys": ["isDeleted"],
+                    "operations": [
+                        {
+                            "operationType": "update",
+                            "record": {
+                                "fields": {"isDeleted": {"value": 1}},
+                                "recordChangeTag": asset._asset_record["recordChangeTag"],
+                                "recordName": asset._asset_record["recordName"],
+                                "recordType": "CPLAsset",
+                            },
+                        }
+                    ],
+                    "zoneID": library_object.zone_id,
+                }
+            )
+            response = library_object.session.post(
+                url, data=post_data, headers={"Content-type": "application/json"}
+            )
+            
+            if response.ok:
                 logger.info("Successfully deleted asset %s from iCloud", asset.filename)
                 return True
             else:
-                logger.error("Asset %s does not have a delete method", asset.filename)
+                logger.error("Failed to delete asset %s from iCloud: HTTP %s", asset.filename, response.status_code)
                 return False
         except Exception as e:
             logger.error("Failed to delete asset %s from iCloud: %s", asset.filename, e)
