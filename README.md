@@ -79,6 +79,7 @@ You can configure the application using either a `config.yaml` file mounted to `
 | `ICLOUD_KEEP_UNICODE` | `keep_unicode` | Keep unicode characters in filenames | `true` |
 | `ICLOUD_SET_EXIF_DATETIME` | `set_exif_datetime` | Update file creation date from EXIF data | `true` |
 | `ICLOUD_FILE_MATCH_POLICY` | `file_match_policy` | Policy to determine if file already exists (`name`, `size`, `checksum`) | `name` |
+| `ICLOUD_DOWNLOAD_RESOLUTION` | `download_resolution` | Download format option (`unmodified`, `high_res`, `compatible`) | `unmodified` |
 | `ICLOUD_DELETE_POLICY` | `delete_policy` | How to handle files deleted from iCloud (`keep`, `delete`, `trash`) | `keep` |
 | `ICLOUD_TRASH_DAYS` | `trash_days` | Number of days to keep files in trash before deleting (if policy is `trash`) | `30` |
 | `ICLOUD_DELETE_AFTER_DOWNLOAD` | `delete_after_download` | Safely move photo to "Recently Deleted" on iCloud after successful local download | `false` |
@@ -86,7 +87,6 @@ You can configure the application using either a `config.yaml` file mounted to `
 | `ICLOUD_CHINA` | `icloud_china` | Set to `true` if your iCloud account is in China | `false` |
 | `ICLOUD_AUTH_CHINA` | `auth_china` | Set to `true` to use China auth servers | `false` |
 | `ICLOUD_LOG_LEVEL` | `log_level` | Application log level (`debug`, `info`, `warning`, `error`) | `info` |
-| `ICLOUD_DEBUG_LOGGING` | `debug_logging` | Enable extensive debug logging | `false` |
 | `ICLOUD_NOTIFICATION_DAYS` | `notification_days` | Days before cookie expiry to notify | `7` |
 
 ### Notification Settings

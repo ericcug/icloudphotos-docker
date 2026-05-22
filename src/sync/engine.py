@@ -75,6 +75,7 @@ class SyncEngine:
             download_delay=config.download_delay,
             retry_interval=config.retry_interval,
             retry_count=config.retry_count,
+            download_resolution=config.download_resolution,
         )
         self.state = SyncState.IDLE
         self.task: Optional[dict] = None

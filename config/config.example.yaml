@@ -18,10 +18,13 @@ directory_permissions: "755"
 keep_unicode: true
 set_exif_datetime: true
 file_match_policy: "name"           # name | size | checksum
+download_resolution: "unmodified"   # unmodified | high_res | compatible
 
 # === 删除策略 ===
 delete_policy: "keep"               # keep | delete | trash
 trash_days: 30
+delete_after_download: false        # 下载后在 iCloud 端移至最近删除
+max_deletions_per_run: 100          # 每次运行最大删除数量限制，防风控
 
 # === 中国区设置 ===
 icloud_china: false

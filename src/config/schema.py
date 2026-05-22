@@ -83,6 +83,7 @@ class Config:
     keep_unicode: bool = True
     set_exif_datetime: bool = True
     file_match_policy: str = "name"
+    download_resolution: str = "unmodified"
 
     # Delete policy
     delete_policy: str = "keep"
@@ -121,6 +122,9 @@ VALID_DELETE_POLICIES = {"keep", "delete", "trash"}
 # Valid file match policies
 VALID_FILE_MATCH_POLICIES = {"name", "size", "checksum"}
 
+# Valid download resolutions
+VALID_DOWNLOAD_RESOLUTIONS = {"unmodified", "high_res", "compatible"}
+
 # Valid log levels
 VALID_LOG_LEVELS = {"debug", "info", "warning", "error"}
 
@@ -141,6 +145,7 @@ ENV_VAR_MAP = {
     "ICLOUD_KEEP_UNICODE": "keep_unicode",
     "ICLOUD_SET_EXIF_DATETIME": "set_exif_datetime",
     "ICLOUD_FILE_MATCH_POLICY": "file_match_policy",
+    "ICLOUD_DOWNLOAD_RESOLUTION": "download_resolution",
     "ICLOUD_DELETE_POLICY": "delete_policy",
     "ICLOUD_TRASH_DAYS": "trash_days",
     "ICLOUD_DELETE_AFTER_DOWNLOAD": "delete_after_download",

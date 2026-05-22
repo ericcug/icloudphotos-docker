@@ -39,6 +39,7 @@ class Downloader:
         download_delay: int = 0,
         retry_interval: int = 120,
         retry_count: int = 3,
+        download_resolution: str = "unmodified",
     ):
         """Initialize downloader.
 
@@ -47,11 +48,13 @@ class Downloader:
             download_delay: Fixed delay between downloads in seconds.
             retry_interval: Wait time before retry in seconds.
             retry_count: Max number of retries per file.
+            download_resolution: Resolution to download (unmodified, high_res, compatible).
         """
         self.wrapper = wrapper
         self.download_delay = download_delay
         self.retry_interval = retry_interval
         self.retry_count = retry_count
+        self.download_resolution = download_resolution
         self.current_delay = download_delay
         self.stats = {"downloaded": 0, "failed": 0, "skipped": 0, "total_bytes": 0}
 
@@ -139,14 +142,36 @@ class Downloader:
             from pyicloud_ipd.version_size import AssetVersionSize, LivePhotoVersionSize
 
             versions = asset.versions
-            original = versions.get(AssetVersionSize.ORIGINAL)
-            original_size = AssetVersionSize.ORIGINAL
-            if not original:
-                original = versions.get(LivePhotoVersionSize.ORIGINAL)
-                original_size = LivePhotoVersionSize.ORIGINAL
+            
+            target_version = None
+            target_size = None
+            
+            if self.download_resolution == "compatible":
+                target_version = versions.get(AssetVersionSize.ALTERNATIVE)
+                target_size = AssetVersionSize.ALTERNATIVE
+                if not target_version:
+                    target_version = versions.get(AssetVersionSize.ORIGINAL)
+                    target_size = AssetVersionSize.ORIGINAL
+            elif self.download_resolution == "high_res":
+                target_version = versions.get(AssetVersionSize.ADJUSTED)
+                target_size = AssetVersionSize.ADJUSTED
+                if not target_version:
+                    target_version = versions.get(AssetVersionSize.ORIGINAL)
+                    target_size = AssetVersionSize.ORIGINAL
+            else: # "unmodified"
+                target_version = versions.get(AssetVersionSize.ORIGINAL)
+                target_size = AssetVersionSize.ORIGINAL
 
-            if not original:
-                logger.warning("No original version available for %s", asset.filename)
+            if not target_version:
+                if self.download_resolution == "compatible":
+                    target_version = versions.get(LivePhotoVersionSize.MEDIUM)
+                    target_size = LivePhotoVersionSize.MEDIUM
+                if not target_version:
+                    target_version = versions.get(LivePhotoVersionSize.ORIGINAL)
+                    target_size = LivePhotoVersionSize.ORIGINAL
+
+            if not target_version:
+                logger.warning("No suitable version available for %s", asset.filename)
                 return None
 
             # download_media handles retry, resume, rate limiting, and session renewal
@@ -156,8 +181,8 @@ class Downloader:
                 icloud=self.wrapper.service,
                 photo=asset,
                 download_path=str(target_path),
-                version=original,
-                size=original_size,
+                version=target_version,
+                size=target_size,
                 filename_builder=lambda a: a.filename,
             )
 
