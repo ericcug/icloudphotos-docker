@@ -8,8 +8,9 @@ authentication flow. Uses threading.Event for cross-thread coordination.
 import logging
 import sys
 import threading
-import time
 from typing import Optional
+
+from notify.channels.telegram_service import TelegramService
 
 logger = logging.getLogger(__name__)
 
@@ -18,35 +19,35 @@ class TelegramMFAProvider:
     """MFA code provider: Telegram notification + stdin fallback.
 
     Two modes of operation:
-    1. **Synchronous** (`request_code`): blocks until code received,
+    1. **Synchronous** (``request_code``): blocks until code received,
        used by AuthManager._handle_2fa() for the main auth flow.
-    2. **Asynchronous** (`send_prompt` + `wait_for_code`): sends prompt
+    2. **Asynchronous** (``send_prompt`` + ``wait_for_code``): sends prompt
        first, then blocks; used when prompt delivery needs to happen
        before waiting.
 
-    External code (TelegramController) calls `provide_code(code)` to
+    External code (TelegramController) calls ``provide_code(code)`` to
     inject the MFA code from a Telegram reply.
 
     Attributes:
-        bot_token: Telegram Bot API token.
+        service: Optional TelegramService for sending prompts.
         chat_id: Target Telegram chat ID.
         timeout: Maximum seconds to wait for code (default 600s).
     """
 
     def __init__(
         self,
-        bot_token: str = "",
+        service: Optional[TelegramService] = None,
         chat_id: str = "",
         timeout: int = 600,
     ):
         """Initialize MFA provider.
 
         Args:
-            bot_token: Telegram Bot API token (empty = stdin-only).
+            service: Shared TelegramService (None = stdin-only).
             chat_id: Target Telegram chat ID.
             timeout: Max wait time for code in seconds.
         """
-        self.bot_token = bot_token
+        self.service = service
         self.chat_id = chat_id
         self.timeout = timeout
         self._code: Optional[str] = None
@@ -55,7 +56,7 @@ class TelegramMFAProvider:
     @property
     def is_telegram_configured(self) -> bool:
         """Check if Telegram is configured for MFA."""
-        return bool(self.bot_token and self.chat_id)
+        return bool(self.service and self.chat_id and self.service.is_running)
 
     # ---- Public API ----
 
@@ -73,38 +74,32 @@ class TelegramMFAProvider:
         if not self.is_telegram_configured:
             logger.info("Telegram not configured; MFA prompt on console only")
             print(f"\n{'=' * 40}", file=sys.stderr)
-            print(f"MFA Required", file=sys.stderr)
+            print("MFA Required", file=sys.stderr)
             print(f"{'=' * 40}", file=sys.stderr)
             print(message, file=sys.stderr)
             return False
 
-        import requests
+        result = self.service.send_message(
+            chat_id=self.chat_id,
+            text=(
+                f"🔐 *MFA Verification Required*\n\n"
+                f"{message}\n\n"
+                f"Please reply with the 6‑digit code within 10 minutes."
+            ),
+            parse_mode="Markdown",
+        )
 
-        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-        try:
-            resp = requests.post(url, json={
-                "chat_id": self.chat_id,
-                "text": (
-                    f"🔐 *MFA Verification Required*\n\n"
-                    f"{message}\n\n"
-                    f"Please reply with the 6‑digit code within 10 minutes."
-                ),
-                "parse_mode": "Markdown",
-            }, timeout=10)
-            if resp.status_code == 200:
-                logger.info("MFA prompt sent to Telegram chat %s", self.chat_id)
-                return True
-            else:
-                logger.warning("Telegram sendMessage failed: %s", resp.text)
-                return False
-        except Exception as e:
-            logger.warning("Failed to send Telegram MFA prompt: %s", e)
-            return False
+        if result:
+            logger.info("MFA prompt sent to Telegram chat %s", self.chat_id)
+        else:
+            logger.warning("Failed to send Telegram MFA prompt")
+
+        return result
 
     def provide_code(self, code: str) -> None:
         """Inject MFA code from external source (e.g., Telegram controller).
 
-        Thread-safe: signals the waiting `wait_for_code()` to return.
+        Thread-safe: signals the waiting ``wait_for_code()`` to return.
 
         Args:
             code: The 6-digit MFA verification code.
@@ -114,9 +109,9 @@ class TelegramMFAProvider:
         logger.info("MFA code provided externally (%d chars)", len(self._code))
 
     def wait_for_code(self, timeout: Optional[int] = None) -> str:
-        """Block until a code is provided via `provide_code()` or stdin.
+        """Block until a code is provided via ``provide_code()`` or stdin.
 
-        If Telegram is configured, waits for `provide_code()` call.
+        If Telegram is configured, waits for ``provide_code()`` call.
         Otherwise, reads from stdin immediately.
 
         Args:

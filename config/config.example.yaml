@@ -63,4 +63,3 @@ pipeline:
 
 # === 高级设置 ===
 log_level: "info"
-debug_logging: false

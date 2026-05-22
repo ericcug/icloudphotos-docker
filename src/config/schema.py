@@ -103,7 +103,6 @@ class Config:
 
     # Advanced
     log_level: str = "info"
-    debug_logging: bool = False
 
     # Derived paths (not configurable via YAML, defaults to config file directory / cookies)
     cookie_dir: Path = Path("./cookies")
@@ -149,7 +148,6 @@ ENV_VAR_MAP = {
     "ICLOUD_CHINA": "icloud_china",
     "ICLOUD_AUTH_CHINA": "auth_china",
     "ICLOUD_LOG_LEVEL": "log_level",
-    "ICLOUD_DEBUG_LOGGING": "debug_logging",
     "ICLOUD_NOTIFICATION_DAYS": "notification_days",
     "ICLOUD_TELEGRAM_ENABLED": "notification.telegram.enabled",
     "ICLOUD_TELEGRAM_TOKEN": "notification.telegram.bot_token",

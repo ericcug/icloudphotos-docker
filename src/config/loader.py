@@ -57,6 +57,9 @@ def load_config(config_path: Path, password: Optional[str] = None) -> Config:
     # Apply environment variable overrides
     _apply_env_overrides(raw)
 
+    # Backward-compatible deprecation: debug_logging → log_level=debug
+    _handle_deprecated_debug_logging(raw)
+
     # Build Config from raw dict
     config = _build_config(raw, password, config_path)
 
@@ -74,6 +77,27 @@ def _apply_env_overrides(raw: Dict[str, Any]) -> None:
         if value is not None and config_path is not None:
             _set_nested(raw, config_path, value)
             logger.debug("Env override: %s=%s", env_key, _mask(value))
+
+
+def _handle_deprecated_debug_logging(raw: Dict[str, Any]) -> None:
+    """Handle deprecated debug_logging field.
+
+    If debug_logging is True (from YAML or ICLOUD_DEBUG_LOGGING env var),
+    auto-upgrade to log_level=debug and emit a deprecation warning.
+    The debug_logging key is then removed from raw dict.
+    """
+    # Check env var directly (since it's no longer in ENV_VAR_MAP)
+    env_debug = os.environ.get("ICLOUD_DEBUG_LOGGING", "").lower()
+    if env_debug in ("true", "1", "yes"):
+        raw["debug_logging"] = True
+
+    debug_val = raw.pop("debug_logging", None)
+    if debug_val and str(debug_val).lower() in ("true", "1", "yes", "True"):
+        logger.warning(
+            "DEPRECATED: 'debug_logging' is removed. "
+            "Use 'log_level: debug' instead. Auto-setting log_level=debug."
+        )
+        raw["log_level"] = "debug"
 
 
 def _set_nested(d: Dict[str, Any], path: str, value: str) -> None:
@@ -126,7 +150,6 @@ _SCHEMA_TYPE_HINTS: Dict[str, Any] = {
     "icloud_china": False,
     "auth_china": False,
     "log_level": "",
-    "debug_logging": False,
     "notification_days": 7,
     "notification.telegram.enabled": False,
     "notification.telegram.bot_token": "",
@@ -199,7 +222,6 @@ def _build_config(raw: Dict[str, Any], password: Optional[str], config_path: Pat
         icloud_china=bool(raw.get("icloud_china", False)),
         auth_china=bool(raw.get("auth_china", False)),
         log_level=str(raw.get("log_level", "info")),
-        debug_logging=bool(raw.get("debug_logging", False)),
         cookie_dir=cookie_dir,
         notification=notification,
         pipeline=pipeline,

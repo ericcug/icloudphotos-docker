@@ -3,9 +3,8 @@
 import logging
 from typing import Optional
 
-import requests
-
 from notify.bus import SystemEvent
+from notify.channels.telegram_service import TelegramService
 
 logger = logging.getLogger(__name__)
 
@@ -13,8 +12,11 @@ logger = logging.getLogger(__name__)
 class TelegramNotifier:
     """Sends system event notifications via Telegram Bot.
 
+    Uses a shared TelegramService instance for connection pooling
+    and persistent HTTPS connections.
+
     Attributes:
-        bot_token: Telegram Bot API token.
+        service: Shared TelegramService for sending messages.
         chat_id: Target chat ID.
     """
 
@@ -31,16 +33,16 @@ class TelegramNotifier:
         "mfa_requested": "🔐",
     }
 
-    def __init__(self, bot_token: str, chat_id: str):
+    def __init__(self, service: TelegramService, chat_id: str):
         """Initialize Telegram notifier.
 
         Args:
-            bot_token: Telegram Bot API token.
+            service: Shared TelegramService instance.
             chat_id: Target Telegram chat ID.
         """
-        self.bot_token = bot_token
+        self.service = service
         self.chat_id = chat_id
-        self.enabled = bool(bot_token and chat_id)
+        self.enabled = bool(chat_id) and service.is_running
 
     def send(self, event: SystemEvent) -> bool:
         """Send an event notification via Telegram.
@@ -51,7 +53,7 @@ class TelegramNotifier:
         Returns:
             True if sent successfully.
         """
-        if not self.enabled:
+        if not self.enabled and not self.service.is_running:
             return False
 
         emoji = self.EVENT_EMOJI.get(event.event_type, "ℹ️")
@@ -62,22 +64,15 @@ class TelegramNotifier:
             details_str = "\n".join(f"  • {k}: {v}" for k, v in event.details.items())
             text += f"\n\n{details_str}"
 
-        try:
-            url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-            resp = requests.post(url, json={
-                "chat_id": self.chat_id,
-                "text": text,
-                "parse_mode": "Markdown",
-            }, timeout=10)
+        result = self.service.send_message(
+            chat_id=self.chat_id,
+            text=text,
+            parse_mode="Markdown",
+        )
 
-            if resp.status_code == 200:
-                logger.debug("Telegram notification sent: %s", event.event_type)
-                return True
-            else:
-                logger.warning("Telegram send failed (HTTP %d): %s",
-                               resp.status_code, resp.text)
-                return False
+        if result:
+            logger.debug("Telegram notification sent: %s", event.event_type)
+        else:
+            logger.warning("Telegram notification failed: %s", event.event_type)
 
-        except Exception as e:
-            logger.warning("Telegram send error: %s", e)
-            return False
+        return result

@@ -90,8 +90,8 @@ def main() -> None:
 
     # Refine logging level based on config
     log_level = args.log_level or config.log_level
-    if log_level != "info" or config.debug_logging:
-        logger.setLevel(logging.DEBUG if config.debug_logging else getattr(logging, log_level.upper(), logging.INFO))
+    if log_level != "info":
+        logger = setup_logging(level=log_level)
 
     logger.info("=" * 50)
     logger.info("iCloud Photo Downloader starting")
@@ -111,11 +111,24 @@ def main() -> None:
     from sync.icloud_wrapper import ICloudWrapper
     from sync.engine import SyncEngine
 
+    # Shared Telegram Bot service (connection pooling)
+    from notify.channels.telegram_service import TelegramService
+
+    telegram_service = None
+    tg_config = config.notification.telegram
+    if tg_config.bot_token and tg_config.chat_id:
+        telegram_service = TelegramService(bot_token=tg_config.bot_token)
+        try:
+            telegram_service.start()
+        except Exception as e:
+            logger.warning("Failed to start TelegramService: %s (continuing without)", e)
+            telegram_service = None
+
     # Auth subsystem
     cookie_store = CookieStore(cookie_dir=config.cookie_dir)
     mfa_provider = TelegramMFAProvider(
-        bot_token=config.notification.telegram.bot_token,
-        chat_id=config.notification.telegram.chat_id,
+        service=telegram_service,
+        chat_id=tg_config.chat_id,
     )
     auth_manager = AuthManager(config, cookie_store, mfa_provider)
 
@@ -124,11 +137,10 @@ def main() -> None:
     from control.file_watch import FileCommandWatcher
 
     telegram_ctrl = TelegramController(
-        bot_token=config.notification.telegram.bot_token,
-        chat_id=config.notification.telegram.chat_id,
+        service=telegram_service,
+        chat_id=tg_config.chat_id,
         engine=None,  # Will attach later
         mfa_provider=mfa_provider,
-        polling_interval=config.notification.telegram.polling_interval,
     )
     if telegram_ctrl.enabled:
         telegram_ctrl.start()
@@ -147,6 +159,8 @@ def main() -> None:
         logger.error("Check your Apple ID and password.")
         if telegram_ctrl.enabled:
             telegram_ctrl.stop()
+        if telegram_service:
+            telegram_service.stop()
         sys.exit(1)
 
     # Sync engine
@@ -170,10 +184,10 @@ def main() -> None:
     event_bus = EventBus(subscribed_events=config.notification.events)
     engine.set_event_bus(event_bus)
 
-    if config.notification.telegram.enabled:
+    if tg_config.enabled and telegram_service:
         tg_notifier = TelegramNotifier(
-            bot_token=config.notification.telegram.bot_token,
-            chat_id=config.notification.telegram.chat_id,
+            service=telegram_service,
+            chat_id=tg_config.chat_id,
         )
         for etype in ["start", "complete", "error", "auth_expired", "cookie_expiring", "low_space", "rate_limited", "sync_paused", "sync_resumed"]:
             event_bus.subscribe(etype, tg_notifier.send)
@@ -203,6 +217,8 @@ def main() -> None:
     if args.once:
         result = engine.run_cycle(once=True)
         logger.info("Sync complete: %s", result)
+        if telegram_service:
+            telegram_service.stop()
         return
 
     # Main sync loop
@@ -212,6 +228,11 @@ def main() -> None:
     except KeyboardInterrupt:
         logger.info("Shutting down...")
         engine.pause()
+    finally:
+        if telegram_ctrl.enabled:
+            telegram_ctrl.stop()
+        if telegram_service:
+            telegram_service.stop()
 
 
 if __name__ == "__main__":

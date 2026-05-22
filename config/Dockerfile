@@ -19,7 +19,6 @@ RUN git clone --depth 1 --branch "${ICLOUDPD_REF}" "${ICLOUDPD_REPO}" /tmp/iclou
 
 # 安装运行时依赖
 RUN pip install --no-cache-dir \
-    requests==2.32.3 \
     "python-telegram-bot>=20.0" \
     "PyYAML>=6.0" \
     "pillow>=10.0"

@@ -33,7 +33,6 @@ def sample_config_dict():
         "icloud_china": False,
         "auth_china": False,
         "log_level": "info",
-        "debug_logging": False,
         "notification": {
             "telegram": {"enabled": False, "bot_token": "", "chat_id": ""},
             "webhook": {"enabled": False, "url": ""},

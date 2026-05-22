@@ -5,15 +5,16 @@ Provides bidirectional Telegram communication:
 - Receives MFA verification codes → feeds to TelegramMFAProvider
 - Sends status reports and notifications
 
-Follows the docker-icloudpd pattern of single-Bot-for-all.
+Uses shared TelegramService for connection pooling. Long polling
+uses Telegram's native timeout parameter so each poll blocks for
+up to 30 seconds, eliminating unnecessary reconnections.
 """
 
 import logging
 import threading
-import time
 from typing import Optional
 
-import requests
+from notify.channels.telegram_service import TelegramService
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +26,13 @@ class TelegramController:
     commands to the sync engine. MFA codes are forwarded to the
     MFA provider via provide_code().
 
+    Uses TelegramService for persistent HTTP connection pooling.
+
     Attributes:
-        bot_token: Telegram Bot API token.
+        service: Shared TelegramService for API calls.
         chat_id: Authorized chat ID.
         engine: SyncEngine instance for command execution.
         mfa_provider: TelegramMFAProvider for MFA code delivery.
-        polling_interval: Seconds between update polls.
         running: Whether the polling loop is active.
     """
 
@@ -45,87 +47,78 @@ class TelegramController:
 
     def __init__(
         self,
-        bot_token: str,
+        service: Optional[TelegramService],
         chat_id: str,
         engine=None,
         mfa_provider=None,
-        polling_interval: int = 5,
     ):
         """Initialize Telegram controller.
 
         Args:
-            bot_token: Telegram Bot API token.
+            service: Shared TelegramService instance.
             chat_id: Authorized chat ID.
             engine: SyncEngine for command execution.
             mfa_provider: TelegramMFAProvider for MFA codes.
-            polling_interval: Poll interval in seconds.
         """
-        self.bot_token = bot_token
+        self.service = service
         self.chat_id = chat_id
         self.engine = engine
         self.mfa_provider = mfa_provider
-        self.polling_interval = polling_interval
         self.running = False
         self._thread: Optional[threading.Thread] = None
         self._last_update_id = 0
-        self.enabled = bool(bot_token and chat_id)
+        self.enabled = bool(service and chat_id)
 
     def start(self) -> None:
         """Start the Telegram polling loop in a background thread."""
         if not self.enabled:
-            logger.info("Telegram controller disabled (bot_token or chat_id not set)")
+            logger.info("Telegram controller disabled (service or chat_id not set)")
             return
 
         self.running = True
         self._thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._thread.start()
-        logger.info("Telegram controller started (polling every %ds)", self.polling_interval)
+        logger.info("Telegram controller started (long polling)")
 
     def stop(self) -> None:
         """Stop the Telegram polling loop."""
         self.running = False
         if self._thread:
-            self._thread.join(timeout=10)
+            self._thread.join(timeout=35)  # wait for long poll to finish
         logger.info("Telegram controller stopped")
 
     def _poll_loop(self) -> None:
-        """Main polling loop for Telegram updates."""
+        """Main polling loop for Telegram updates.
+
+        Each iteration does a long poll (30s timeout), so there is no
+        need for an additional sleep between iterations. The connection
+        is reused via TelegramService's httpx pool.
+        """
         while self.running:
             try:
                 self._check_updates()
             except Exception as e:
                 logger.error("Telegram poll error: %s", e)
-            time.sleep(self.polling_interval)
 
     def _check_updates(self) -> None:
         """Fetch and process pending Telegram updates."""
-        url = f"https://api.telegram.org/bot{self.bot_token}/getUpdates"
-        params = {
-            "offset": self._last_update_id + 1,
-            "timeout": 30,
-            "limit": 10,
-        }
+        updates = self.service.get_updates(
+            offset=self._last_update_id + 1,
+            timeout=30,
+            limit=10,
+        )
 
-        try:
-            resp = requests.get(url, params=params, timeout=35)
-            data = resp.json()
-
-            if not data.get("ok"):
-                logger.warning("Telegram API error: %s", data.get("description"))
-                return
-
-            for update in data.get("result", []):
-                self._last_update_id = update["update_id"]
-                self._process_update(update)
-
-        except requests.RequestException as e:
-            logger.debug("Telegram network error: %s", e)
+        for update in updates:
+            update_id = update.get("update_id", 0)
+            if update_id > self._last_update_id:
+                self._last_update_id = update_id
+            self._process_update(update)
 
     def _process_update(self, update: dict) -> None:
         """Process a single Telegram update.
 
         Args:
-            update: Telegram update object.
+            update: Telegram update object (dict).
         """
         message = update.get("message", {})
         text = message.get("text", "").strip()
@@ -214,12 +207,9 @@ class TelegramController:
         Args:
             text: Message text (supports Markdown).
         """
-        try:
-            url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-            requests.post(url, json={
-                "chat_id": self.chat_id,
-                "text": text,
-                "parse_mode": "Markdown",
-            }, timeout=10)
-        except Exception as e:
-            logger.warning("Failed to send Telegram reply: %s", e)
+        if self.service:
+            self.service.send_message(
+                chat_id=self.chat_id,
+                text=text,
+                parse_mode="Markdown",
+            )
