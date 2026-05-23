@@ -37,6 +37,11 @@ def setup_logging(level: str = "info", debug: bool = False) -> logging.Logger:
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
 
+    # Suppress noisy httpx HTTP-request logs (e.g. Telegram long-poll 200 OK)
+    # unless we're in debug mode where full verbosity is desired.
+    if not debug:
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+
     return root_logger
 
 
