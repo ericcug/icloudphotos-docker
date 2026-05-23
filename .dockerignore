@@ -25,7 +25,9 @@ htmlcov/
 # Spec & AI agent tooling
 .specify/
 .agents/
+.codex/
 specs/
+AGENTS.md
 
 # Local dev dependencies (not used in Docker build)
 libs/
@@ -41,3 +43,7 @@ Thumbs.db
 # Config (except template)
 config/config.yaml
 config/*.env
+
+# Documentation
+README.md
+LICENSE

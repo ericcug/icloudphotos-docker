@@ -60,43 +60,49 @@ class TestPipelineRunner:
         runner = PipelineRunner(config)
         assert runner.is_empty
 
-    def test_process_file_sequential(self, tmp_path):
+    @patch("pipeline.runner.importlib.import_module")
+    def test_process_file_sequential(self, mock_import, tmp_path):
         """Verify sequential execution of pipeline steps."""
         test_file = tmp_path / "test.jpg"
         test_file.write_text("test")
 
-        # Load built-in HEIC converter (won't convert JPG → passthrough)
-        config = PipelineConfig(steps=[
-            PipelineStepConfig(
-                name="heic_convert",
-                config={"quality": 85, "remove_original": False},
-                retry=1,
-            ),
-        ])
-        runner = PipelineRunner(config)
-        assert not runner.is_empty
+        mock_module = MagicMock()
+        mock_module.MockProcessor = MockProcessor
+        mock_import.return_value = mock_module
 
-        result = runner.process_file(test_file, {"filename": "test.jpg"})
-        assert result.suffix == ".jpg"  # HEIC converter skips non-HEIC
+        # Register a mock built-in for this test
+        PipelineRunner.BUILTIN_PROCESSORS["mock_step"] = "mock_module.MockProcessor"
+        try:
+            config = PipelineConfig(steps=[
+                PipelineStepConfig(
+                    name="mock_step",
+                    config={},
+                    retry=1,
+                ),
+            ])
+            runner = PipelineRunner(config)
+            assert not runner.is_empty
+
+            result = runner.process_file(test_file, {"filename": "test.jpg"})
+            assert result == test_file  # Mock processor passes through
+        finally:
+            PipelineRunner.BUILTIN_PROCESSORS.pop("mock_step", None)
 
     @patch("pipeline.runner.importlib.import_module")
-    def test_load_builtin_processor(self, mock_import, tmp_path):
-        """Verify built-in processor loading."""
+    def test_load_user_processor(self, mock_import, tmp_path):
+        """Verify user-provided processor loading."""
         mock_module = MagicMock()
-        mock_module.HeicToJpgProcessor = MockProcessor
+        mock_module.MyPlugin = MockProcessor
         mock_import.return_value = mock_module
 
         config = PipelineConfig(steps=[
-            PipelineStepConfig(name="heic_convert", config={}, retry=1),
+            PipelineStepConfig(name="my_plugin", config={}, retry=1),
         ])
         runner = PipelineRunner(config)
         assert len(runner.steps) == 1
 
-    def test_cleanup_calls_all_processors(self):
-        config = PipelineConfig(steps=[
-            PipelineStepConfig(name="heic_convert", config={}, retry=1),
-        ])
-        # Just verify cleanup doesn't crash with empty steps
+    def test_cleanup_does_not_crash_on_empty(self):
+        config = PipelineConfig(steps=[])
         runner = PipelineRunner(config)
         runner.cleanup()  # Should not raise
 

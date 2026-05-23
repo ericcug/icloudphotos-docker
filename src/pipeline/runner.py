@@ -22,9 +22,7 @@ class PipelineRunner:
     """
 
     # Built-in processors by name
-    BUILTIN_PROCESSORS = {
-        "heic_convert": "pipeline.builtin.heic_convert.HeicToJpgProcessor",
-    }
+    BUILTIN_PROCESSORS = {}
 
     def __init__(self, pipeline_config):
         """Initialize pipeline runner from configuration.

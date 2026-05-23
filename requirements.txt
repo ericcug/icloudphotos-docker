@@ -4,12 +4,8 @@
 # 其他依赖
 python-telegram-bot>=20.0
 PyYAML>=6.0
-pillow>=10.0
 
-# 可选：HEIC→JPG 转换
-# pillow-heif>=0.13.0
-
-# 开发/测试
+# 开发/测试（不包含在 Docker 镜像中）
 pytest>=7.0
 pytest-cov>=4.0
 pytest-mock>=3.0

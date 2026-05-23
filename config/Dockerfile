@@ -4,31 +4,38 @@ FROM python:3.11-slim AS builder
 ARG ICLOUDPD_REPO=https://github.com/ericcug/icloud_photos_downloader.git
 ARG ICLOUDPD_REF=master
 
-# 安装构建期工具
+# 安装构建期工具 + 创建虚拟环境 + 安装所有依赖（单层合并）
 RUN apt-get update && apt-get install -y --no-install-recommends git \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m venv /opt/venv
 
-# 创建虚拟环境，隔离依赖
-RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# 从 Git 拉取并安装 icloud_photos_downloader
+# 从 Git 拉取并安装 icloud_photos_downloader + 运行时依赖（合并为一层）
 RUN git clone --depth 1 --branch "${ICLOUDPD_REF}" "${ICLOUDPD_REPO}" /tmp/icloudpd_src \
-    && pip install --no-cache-dir /tmp/icloudpd_src \
-    && rm -rf /tmp/icloudpd_src
+    && pip install --no-cache-dir --no-compile \
+        /tmp/icloudpd_src \
+        "python-telegram-bot>=20.0" \
+        "PyYAML>=6.0" \
+    && rm -rf /tmp/icloudpd_src \
+    # 清理运行时不需要的文件
+    && find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null; \
+       find /opt/venv -name "*.pyc" -o -name "*.pyo" | xargs rm -f 2>/dev/null; \
+       find /opt/venv -type d -name "tests" -exec rm -rf {} + 2>/dev/null; \
+       find /opt/venv -type d -name "test" -exec rm -rf {} + 2>/dev/null; \
+       find /opt/venv -type d -name "testing" -exec rm -rf {} + 2>/dev/null; \
+       find /opt/venv -type d -name "docs" -exec rm -rf {} + 2>/dev/null; \
+       true
 
-# 安装运行时依赖
-RUN pip install --no-cache-dir \
-    "python-telegram-bot>=20.0" \
-    "PyYAML>=6.0" \
-    "pillow>=10.0"
+# --- 最终运行镜像（Alpine） ---
+FROM python:3.11-alpine
 
-# --- 最终运行镜像 ---
-FROM python:3.11-slim
+# 安装最小运行时依赖
+RUN apk add --no-cache bash libffi
 
 # 创建非 root 用户
-RUN groupadd -g 1000 icloud && \
-    useradd -u 1000 -g icloud -m -s /bin/bash icloud
+RUN addgroup -g 1000 icloud && \
+    adduser -u 1000 -G icloud -D -s /bin/bash icloud
 
 # 从 builder 阶段复制虚拟环境
 COPY --from=builder /opt/venv /opt/venv

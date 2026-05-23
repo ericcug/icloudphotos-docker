@@ -25,8 +25,8 @@ if [ "$cookie_count" -eq 0 ]; then
     exit 0
 fi
 
-# Check if sync process is running
-if ! pgrep -f "python -m main" > /dev/null 2>&1; then
+# Check if sync process is running (Alpine-compatible, no pgrep needed)
+if ! ps aux 2>/dev/null | grep -v grep | grep -q "python -m main"; then
     echo "Sync process not running"
     exit 1
 fi
