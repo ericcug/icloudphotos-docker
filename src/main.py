@@ -59,6 +59,13 @@ def main() -> None:
     # Early logging setup (level will be refined after config load)
     logger = setup_logging(level="info", debug=False)
 
+    import signal
+    def handle_sigterm(signum, frame):
+        if logger:
+            logger.info("Received SIGTERM, initiating shutdown...")
+        raise KeyboardInterrupt("SIGTERM received")
+    signal.signal(signal.SIGTERM, handle_sigterm)
+
     from config.loader import ConfigError, load_config
 
     # Get password from environment (never from config file)
