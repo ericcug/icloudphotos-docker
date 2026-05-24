@@ -1,5 +1,6 @@
 """Telegram notification channel for system events."""
 
+import html
 import logging
 from typing import Optional
 
@@ -58,16 +59,21 @@ class TelegramNotifier:
 
         emoji = self.EVENT_EMOJI.get(event.event_type, "ℹ️")
         severity = event.severity.upper()
-        text = f"{emoji} *{severity}* — {event.message}"
+        
+        safe_message = html.escape(str(event.message))
+        text = f"{emoji} <b>{severity}</b> — {safe_message}"
 
         if event.details:
-            details_str = "\n".join(f"  • {k}: {v}" for k, v in event.details.items())
+            details_str = "\n".join(
+                f"  • {html.escape(str(k))}: {html.escape(str(v))}"
+                for k, v in event.details.items()
+            )
             text += f"\n\n{details_str}"
 
         result = self.service.send_message(
             chat_id=self.chat_id,
             text=text,
-            parse_mode="Markdown",
+            parse_mode="HTML",
         )
 
         if result:
