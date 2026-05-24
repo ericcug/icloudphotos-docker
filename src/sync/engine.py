@@ -214,16 +214,22 @@ class SyncEngine:
         # Phase 2: Compute diff
         diffs = self.differ.compute_diff(cloud_assets)
         download_count = sum(1 for d in diffs if d.status in ("new", "modified"))
+        total_cloud = len(cloud_assets)
 
         if download_count == 0:
             logger.info("No new or modified assets to download")
             if self._event_bus:
+                duration = (datetime.now(timezone.utc) - start_time).total_seconds()
                 self._event_bus.publish(SystemEvent(
                     event_type=EventType.COMPLETE, severity="info",
-                    message="Sync complete — no changes"
+                    message=(
+                        f"Sync complete — no changes\n"
+                        f"☁️ Cloud library: {total_cloud} items\n"
+                        f"⏱ Duration: {self._format_duration(duration)}"
+                    ),
                 ))
             self.state = SyncState.IDLE
-            return self._build_summary(start_time, 0, 0)
+            return self._build_summary(start_time, 0, 0, total_cloud=total_cloud)
 
         # Phase 3: Download
         self.state = SyncState.DOWNLOADING
@@ -234,6 +240,9 @@ class SyncEngine:
         failed = 0
         deleted_count = 0
         limit_reached_logged = False
+        # Track media type breakdown for summary notification
+        media_counts: Dict[str, int] = {"photo": 0, "video": 0, "live_photo": 0}
+        total_bytes_downloaded = 0
 
         for diff in diffs:
             if self._pause_requested:
@@ -263,6 +272,16 @@ class SyncEngine:
 
             if result:
                 processed += 1
+                # Track media type for completion summary
+                media_type = diff.cloud_metadata.get("media_type", "photo")
+                media_counts[media_type] = media_counts.get(media_type, 0) + 1
+                # Track downloaded size
+                try:
+                    if result.exists():
+                        total_bytes_downloaded += result.stat().st_size
+                except OSError:
+                    pass
+
                 # Phase 4: Post-processing (US2 integration point)
                 if self._pipeline_runner:
                     self.state = SyncState.PROCESSING
@@ -289,28 +308,178 @@ class SyncEngine:
                     processed, download_count, failed,
                 )
 
-        self.state = SyncState.IDLE
-        return self._build_summary(start_time, processed, failed)
+        # Publish detailed completion notification
+        if self._event_bus:
+            duration = (datetime.now(timezone.utc) - start_time).total_seconds()
+            message = self._format_complete_message(
+                processed=processed,
+                failed=failed,
+                media_counts=media_counts,
+                total_bytes=total_bytes_downloaded,
+                total_cloud=total_cloud,
+                duration=duration,
+                deleted=deleted_count,
+            )
+            self._event_bus.publish(SystemEvent(
+                event_type=EventType.COMPLETE,
+                severity="info" if failed == 0 else "warning",
+                message=message,
+                details={
+                    "downloaded": processed,
+                    "failed": failed,
+                    "photos": media_counts.get("photo", 0),
+                    "videos": media_counts.get("video", 0),
+                    "live_photos": media_counts.get("live_photo", 0),
+                    "total_bytes": total_bytes_downloaded,
+                    "cloud_total": total_cloud,
+                },
+            ))
 
-    def _build_summary(self, start_time: datetime, processed: int, failed: int) -> dict:
+        self.state = SyncState.IDLE
+        return self._build_summary(
+            start_time, processed, failed,
+            media_counts=media_counts,
+            total_bytes=total_bytes_downloaded,
+            total_cloud=total_cloud,
+            deleted=deleted_count,
+        )
+
+    def _build_summary(
+        self,
+        start_time: datetime,
+        processed: int,
+        failed: int,
+        media_counts: Optional[Dict[str, int]] = None,
+        total_bytes: int = 0,
+        total_cloud: int = 0,
+        deleted: int = 0,
+    ) -> dict:
         """Build task summary dictionary.
 
         Args:
             start_time: Cycle start time.
             processed: Number of successfully processed assets.
             failed: Number of failed assets.
+            media_counts: Breakdown by media type (photo/video/live_photo).
+            total_bytes: Total bytes downloaded this cycle.
+            total_cloud: Total cloud library size.
+            deleted: Number of assets deleted from iCloud.
 
         Returns:
             Summary dict.
         """
         duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-        return {
+        summary = {
             "started_at": start_time.isoformat(),
             "duration_seconds": duration,
             "processed": processed,
             "failed": failed,
             "state": self.state.value,
+            "cloud_total": total_cloud,
         }
+        if media_counts:
+            summary["photos"] = media_counts.get("photo", 0)
+            summary["videos"] = media_counts.get("video", 0)
+            summary["live_photos"] = media_counts.get("live_photo", 0)
+        if total_bytes:
+            summary["total_bytes"] = total_bytes
+        if deleted:
+            summary["deleted"] = deleted
+        return summary
+
+    def _format_complete_message(
+        self,
+        processed: int,
+        failed: int,
+        media_counts: Dict[str, int],
+        total_bytes: int,
+        total_cloud: int,
+        duration: float,
+        deleted: int = 0,
+    ) -> str:
+        """Format a human-readable sync completion message.
+
+        Args:
+            processed: Total files downloaded.
+            failed: Total files failed.
+            media_counts: Breakdown by media type.
+            total_bytes: Total bytes downloaded.
+            total_cloud: Total items in cloud library.
+            duration: Cycle duration in seconds.
+            deleted: Number of assets deleted from iCloud.
+
+        Returns:
+            Formatted multi-line message string.
+        """
+        lines = [f"Sync complete — {processed} downloaded"]
+
+        # Media type breakdown
+        parts = []
+        photos = media_counts.get("photo", 0)
+        videos = media_counts.get("video", 0)
+        live_photos = media_counts.get("live_photo", 0)
+        if photos:
+            parts.append(f"📷 {photos} photo{'s' if photos != 1 else ''}")
+        if videos:
+            parts.append(f"🎬 {videos} video{'s' if videos != 1 else ''}")
+        if live_photos:
+            parts.append(f"🔄 {live_photos} live photo{'s' if live_photos != 1 else ''}")
+        if parts:
+            lines.append(", ".join(parts))
+
+        # Download size
+        if total_bytes > 0:
+            lines.append(f"💾 {self._format_size(total_bytes)}")
+
+        # Failures
+        if failed:
+            lines.append(f"⚠️ {failed} failed")
+
+        # Deletions
+        if deleted:
+            lines.append(f"🗑 {deleted} deleted from iCloud")
+
+        # Cloud total and duration
+        lines.append(f"☁️ Cloud library: {total_cloud} items")
+        lines.append(f"⏱ Duration: {self._format_duration(duration)}")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_size(size_bytes: int) -> str:
+        """Format byte count to human-readable string.
+
+        Args:
+            size_bytes: Size in bytes.
+
+        Returns:
+            Human-readable size string (e.g. '1.5 GB').
+        """
+        for unit in ("B", "KB", "MB", "GB", "TB"):
+            if abs(size_bytes) < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} PB"
+
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        """Format duration in seconds to human-readable string.
+
+        Args:
+            seconds: Duration in seconds.
+
+        Returns:
+            Formatted string like '2m 30s' or '1h 5m'.
+        """
+        if seconds < 60:
+            return f"{int(seconds)}s"
+        minutes = int(seconds // 60)
+        secs = int(seconds % 60)
+        if minutes < 60:
+            return f"{minutes}m {secs}s"
+        hours = minutes // 60
+        mins = minutes % 60
+        return f"{hours}h {mins}m"
 
     def _check_pause(self) -> None:
         """Check if pause was requested and handle it."""
