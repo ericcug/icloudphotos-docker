@@ -6,6 +6,7 @@ backoff per the spec (FR-011).
 """
 
 import logging
+import shutil
 import threading
 import time
 from datetime import datetime, timezone
@@ -113,6 +114,12 @@ class SyncEngine:
         self._pause_requested = False
         if self.state == SyncState.PAUSED:
             self.state = SyncState.IDLE
+            if self._event_bus:
+                self._event_bus.publish(SystemEvent(
+                    event_type=EventType.SYNC_RESUMED,
+                    severity="info",
+                    message="Sync engine resumed.",
+                ))
             self._resume_event.set()
 
     def sync_now(self) -> None:
@@ -133,6 +140,9 @@ class SyncEngine:
 
         while True:
             try:
+                # Check cookie expiry before every cycle
+                self._check_cookie_expiry()
+
                 self._check_pause()
                 if self.state == SyncState.PAUSED:
                     # Block until resumed instead of busy-waiting
@@ -146,9 +156,6 @@ class SyncEngine:
 
                 # Reset recovery counter on success
                 recovery_attempt = 0
-
-                # Check cookie expiry after each cycle (docker-icloudpd pattern)
-                self._check_cookie_expiry()
 
                 # Wait for next interval
                 self.state = SyncState.WAITING
@@ -202,7 +209,6 @@ class SyncEngine:
         for asset in self.wrapper.photos:
             if self._pause_requested:
                 self._handle_pause()
-                break
             metadata = self.wrapper.get_asset_metadata(asset)
             cloud_assets.append(metadata)
             asset_map[metadata["record_name"]] = asset
@@ -210,17 +216,18 @@ class SyncEngine:
         # Phase 2: Compute diff
         diffs = self.differ.compute_diff(cloud_assets)
         download_count = sum(1 for d in diffs if d.status in ("new", "modified"))
+        delete_count = sum(1 for d in diffs if d.status == "deleted_remotely")
         total_cloud = len(cloud_assets)
 
-        if download_count == 0:
-            logger.info("No new or modified assets to download")
+        if download_count == 0 and delete_count == 0:
+            logger.info("No new, modified, or remotely deleted assets to process")
             self.state = SyncState.IDLE
             return self._build_summary(start_time, 0, 0, total_cloud=total_cloud)
 
-        # Phase 3: Download
+        # Phase 3: Download & Cleanup
         self.state = SyncState.DOWNLOADING
         self.downloader.reset_stats()
-        logger.info("Phase: DOWNLOADING — %d assets to download", download_count)
+        logger.info("Phase: DOWNLOADING — %d to download, %d to clean up", download_count, delete_count)
 
         processed = 0
         failed = 0
@@ -233,7 +240,24 @@ class SyncEngine:
         for diff in diffs:
             if self._pause_requested:
                 self._handle_pause()
-                break
+
+            if diff.status == "deleted_remotely":
+                if self.config.delete_policy in ("delete", "trash"):
+                    try:
+                        if self.config.delete_policy == "trash":
+                            trash_dir = self.config.download_path / ".trash"
+                            trash_dir.mkdir(parents=True, exist_ok=True)
+                            if diff.local_path and diff.local_path.exists():
+                                trash_path = trash_dir / diff.local_path.name
+                                shutil.move(str(diff.local_path), str(trash_path))
+                                logger.info("Trashed local file: %s", diff.local_path.name)
+                        else:
+                            if diff.local_path and diff.local_path.exists():
+                                diff.local_path.unlink()
+                                logger.info("Deleted local file: %s", diff.local_path.name)
+                    except Exception as e:
+                        logger.error("Failed to remove local file %s: %s", diff.local_path, e)
+                continue
 
             if diff.status not in ("new", "modified"):
                 continue
@@ -476,6 +500,12 @@ class SyncEngine:
         """Transition to paused state, blocking until resumed via Event."""
         logger.info("Pausing sync engine")
         self.state = SyncState.PAUSED
+        if self._event_bus:
+            self._event_bus.publish(SystemEvent(
+                event_type=EventType.SYNC_PAUSED,
+                severity="info",
+                message="Sync engine paused.",
+            ))
         self._resume_event.clear()
         # Block until resume() signals the event (replaces busy-wait)
         self._resume_event.wait()
@@ -534,21 +564,14 @@ class SyncEngine:
             logger.warning("Cookie expiry check failed: %s", e)
 
     def _wait_interval(self) -> None:
-        """Wait for the next sync interval, checking for pause/resume.
-
-        Uses monotonic clock for accurate timing instead of accumulating
-        fixed increments.
-        """
+        """Wait for the next sync interval, checking for pause/resume."""
         interval = self.config.download_interval
         logger.info("Next sync in %d seconds", interval)
 
-        deadline = time.monotonic() + interval
-        while time.monotonic() < deadline:
+        remaining = interval
+        while remaining > 0:
             if self._pause_requested:
                 self._handle_pause()
-                # Reset deadline after resume
-                deadline = time.monotonic() + interval
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            time.sleep(min(10, remaining))
+            sleep_time = min(10, remaining)
+            time.sleep(sleep_time)
+            remaining -= sleep_time

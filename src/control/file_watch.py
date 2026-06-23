@@ -6,6 +6,8 @@ of file-watch-based control as fallback.
 """
 
 import logging
+import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -52,12 +54,21 @@ class FileCommandWatcher:
         self.running = False
 
     def start(self) -> None:
-        """Start watching in a simple loop (called from main thread)."""
+        """Start watching in a background thread."""
         logger.info("File command watcher started: %s (interval=%ds)",
                      self.command_file, self.polling_interval)
         self.running = True
-        # Note: In production, this should run in a separate thread
-        # For now, it's polled synchronously by the engine
+        self._thread = threading.Thread(target=self._poll_loop, daemon=True)
+        self._thread.start()
+
+    def _poll_loop(self) -> None:
+        """Background loop to poll for commands."""
+        while self.running:
+            try:
+                self.check_commands()
+            except Exception as e:
+                logger.error("File watcher loop error: %s", e)
+            time.sleep(self.polling_interval)
 
     def stop(self) -> None:
         """Stop watching."""

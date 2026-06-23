@@ -6,6 +6,12 @@ services:
       dockerfile: config/Dockerfile
     container_name: icloudphotos
     restart: unless-stopped
+    dns:
+      - 192.168.10.1          # 宿主机路由器 DNS（主）
+      - 8.8.8.8               # Google DNS（备用）
+      - 8.8.4.4
+    dns_opt:
+      - ndots:2               # 减少不必要的 search domain 查询
     environment:
       - ICLOUD_PASSWORD=${ICLOUD_PASSWORD}      # 通过环境变量传入，不写入文件
       - TZ=${TZ:-Asia/Shanghai}

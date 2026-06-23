@@ -51,8 +51,11 @@ notification:
     - complete
     - error
     - auth_expired
+    - cookie_expiring
     - low_space
     - rate_limited
+    - sync_paused
+    - sync_resumed
 
 # === 后置处理流水线 ===
 pipeline:
