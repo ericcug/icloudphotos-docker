@@ -76,8 +76,7 @@ src/
 │   │   ├── base.py           # 插件抽象基类 (FR-014, FR-016a)
 │   │   ├── runner.py         # 流水线编排器 (FR-013, FR-015, FR-016)
 │   │   └── builtin/          # 内置后置处理器
-│   │       ├── __init__.py
-│   │       └── heic_convert.py  # HEIC→JPG 转换 (参考 docker-icloudpd)
+│   │       └── __init__.py
 │   ├── notify/               # 消息通知总线
 │   │   ├── __init__.py
 │   │   ├── bus.py            # 事件总线与分发 (FR-017, FR-019, FR-020)
@@ -108,8 +107,7 @@ tests/
 │   └── test_icloud_wrapper.py
 ├── pipeline/
 │   ├── test_base.py
-│   ├── test_runner.py
-│   └── test_heic_convert.py
+│   └── test_runner.py
 ├── notify/
 │   ├── test_bus.py
 │   └── test_channels.py

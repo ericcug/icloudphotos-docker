@@ -69,7 +69,7 @@
 - [x] T020 [P] [US1] Unit tests for iCloud wrapper in `tests/sync/test_icloud_wrapper.py` — test PyiCloudService creation, authenticate(), photos property mock
 - [x] T021 [P] [US1] Unit tests for metadata differ in `tests/sync/test_differ.py` — test local vs cloud diff, new/modified/deleted detection, delete_policy
 - [x] T022 [P] [US1] Unit tests for downloader in `tests/sync/test_downloader.py` — test download_photo mock, retry, resume, rate limiting (FR-012a)
-- [x] T023 [US1] Integration test for US1 end-to-end in `tests/test_integration.py` — test config load → auth → differ → download pipeline with mocks
+- [ ] T023 [US1] Integration test for US1 end-to-end in `tests/test_integration.py` — test config load → auth → differ → download pipeline with mocks
 
 ### Implementation for User Story 1
 
@@ -94,18 +94,15 @@
 
 ### Tests for User Story 2
 
-- [x] T032 [P] [US2] Unit tests for BaseProcessor ABC in `tests/pipeline/test_base.py` — test ABC enforcement, version check, incomplete implementation error
-- [x] T033 [P] [US2] Unit tests for pipeline runner in `tests/pipeline/test_runner.py` — test sequential execution, retry on failure, skip disabled steps, error isolation (one failure doesn't block others)
-- [x] T034 [P] [US2] Unit tests for HEIC converter in `tests/pipeline/test_heic_convert.py` — test HEIC→JPG conversion, non-HEIC passthrough, quality config
-
+- [ ] T032 [P] [US2] Unit tests for BaseProcessor ABC in `tests/pipeline/test_base.py` — test ABC enforcement, version check, incomplete implementation error
+- [ ] T033 [P] [US2] Unit tests for pipeline runner in `tests/pipeline/test_runner.py` — test sequential execution, retry on failure, skip disabled steps, error isolation (one failure doesn't block others)
 ### Implementation for User Story 2
 
-- [x] T035 [P] [US2] Implement BaseProcessor ABC `src/icloud_docker/pipeline/base.py` — abstract base class with init/process/cleanup lifecycle and ProcessorError (FR-016a)
-- [x] T036 [P] [US2] Implement built-in HEIC converter `src/icloud_docker/pipeline/builtin/heic_convert.py` — pillow-based conversion, quality config, remove_original option
-- [x] T037 [US2] Implement pipeline runner `src/icloud_docker/pipeline/runner.py` — load steps from config, instantiate processors, sequential execution with retry and error isolation (FR-013, FR-015, FR-016)
-- [x] T038 [US2] Integrate pipeline runner into sync engine — call runner.process(file_path, metadata) after each successful download in engine.py
+- [ ] T035 [P] [US2] Implement BaseProcessor ABC `src/icloud_docker/pipeline/base.py` — abstract base class with init/process/cleanup lifecycle and ProcessorError (FR-016a)
+- [ ] T037 [US2] Implement pipeline runner `src/icloud_docker/pipeline/runner.py` — load steps from config, instantiate processors, sequential execution with retry and error isolation (FR-013, FR-015, FR-016)
+- [ ] T038 [US2] Integrate pipeline runner into sync engine — call runner.process(file_path, metadata) after each successful download in engine.py
 
-**Checkpoint**: US1 + US2 可独立验证——下载完成后 HEIC→JPG 转换自动执行
+**Checkpoint**: US1 + US2 可独立验证——下载完成后后置处理自动执行
 
 ---
 
