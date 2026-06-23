@@ -190,12 +190,8 @@ class SyncEngine:
         Returns:
             Task summary dict.
         """
-        logger.info("=" * 40)
+        logger.info("="  * 40)
         logger.info("Sync cycle started")
-        if self._event_bus:
-            self._event_bus.publish(SystemEvent(
-                event_type=EventType.START, severity="info", message="Sync cycle started"
-            ))
         start_time = datetime.now(timezone.utc)
 
         # Phase 1: Check iCloud connection and build asset map
@@ -218,16 +214,6 @@ class SyncEngine:
 
         if download_count == 0:
             logger.info("No new or modified assets to download")
-            if self._event_bus:
-                duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-                self._event_bus.publish(SystemEvent(
-                    event_type=EventType.COMPLETE, severity="info",
-                    message=(
-                        f"Sync complete — no changes\n"
-                        f"☁️ Cloud library: {total_cloud} items\n"
-                        f"⏱ Duration: {self._format_duration(duration)}"
-                    ),
-                ))
             self.state = SyncState.IDLE
             return self._build_summary(start_time, 0, 0, total_cloud=total_cloud)
 

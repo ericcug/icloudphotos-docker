@@ -10,6 +10,8 @@ uses Telegram's native timeout parameter so each poll blocks for
 up to 30 seconds, eliminating unnecessary reconnections.
 """
 
+import os
+
 import logging
 import threading
 from typing import Optional
@@ -51,6 +53,7 @@ class TelegramController:
         chat_id: str,
         engine=None,
         mfa_provider=None,
+        auth_manager=None,
     ):
         """Initialize Telegram controller.
 
@@ -59,11 +62,13 @@ class TelegramController:
             chat_id: Authorized chat ID.
             engine: SyncEngine for command execution.
             mfa_provider: TelegramMFAProvider for MFA codes.
+            auth_manager: AuthManager for re-authentication.
         """
         self.service = service
         self.chat_id = chat_id
         self.engine = engine
         self.mfa_provider = mfa_provider
+        self.auth_manager = auth_manager
         self.running = False
         self._thread: Optional[threading.Thread] = None
         self._last_update_id = 0
@@ -194,12 +199,50 @@ class TelegramController:
             self._send_reply(msg)
 
     def request_reauth(self) -> None:
-        """Handle /reauth command."""
+        """Handle /reauth command.
+
+        Triggers a full re-authentication cycle:
+        1. Deletes existing cookies
+        2. Performs SRP login (triggers Apple MFA push)
+        3. Waits for MFA code via Telegram
+        4. Updates the sync engine's wrapper with the new service
+        """
+        if not self.auth_manager:
+            self._send_reply("❌ Re-authentication not available (auth_manager not set).")
+            return
+
+        password = os.environ.get("ICLOUD_PASSWORD", "")
+        if not password:
+            self._send_reply("❌ ICLOUD_PASSWORD environment variable not set.")
+            return
+
         self._send_reply(
-            "🔐 Re-authentication requested.\n"
+            "🔐 Re-authentication started...\n"
             "Please send the 6-digit MFA code when prompted."
         )
-        # The actual re-auth is triggered by cookie expiry detection
+
+        # Run reauth in a separate thread to avoid blocking the poll loop
+        reauth_thread = threading.Thread(
+            target=self._do_reauth, args=(password,), daemon=True
+        )
+        reauth_thread.start()
+
+    def _do_reauth(self, password: str) -> None:
+        """Perform re-authentication in background thread.
+
+        Args:
+            password: iCloud Apple ID password.
+        """
+        try:
+            new_service = self.auth_manager.reauthenticate(password)
+            # Update the sync engine's wrapper with the fresh service
+            if self.engine:
+                self.engine.wrapper.service = new_service
+            self._send_reply("✅ Re-authentication successful. Cookies refreshed.")
+            logger.info("Re-authentication completed via /reauth command")
+        except Exception as e:
+            logger.error("Re-authentication failed: %s", e)
+            self._send_reply(f"❌ Re-authentication failed: {e}")
 
     def _send_reply(self, text: str) -> None:
         """Send a reply message to the authorized chat.

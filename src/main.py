@@ -148,6 +148,7 @@ def main() -> None:
         chat_id=tg_config.chat_id,
         engine=None,  # Will attach later
         mfa_provider=mfa_provider,
+        auth_manager=auth_manager,
     )
     if telegram_ctrl.enabled:
         telegram_ctrl.start()
