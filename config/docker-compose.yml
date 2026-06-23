@@ -6,19 +6,15 @@ services:
       dockerfile: config/Dockerfile
     container_name: icloudphotos
     restart: unless-stopped
-    dns:
-      - 192.168.10.1          # 宿主机路由器 DNS（主）
-      - 8.8.8.8               # Google DNS（备用）
-      - 8.8.4.4
     dns_opt:
-      - ndots:2               # 减少不必要的 search domain 查询
+      - ndots:2               # Reduce unnecessary search domain queries
     environment:
-      - ICLOUD_PASSWORD=${ICLOUD_PASSWORD}      # 通过环境变量传入，不写入文件
+      - ICLOUD_PASSWORD=${ICLOUD_PASSWORD}      # Passed via environment variable, not written to file
       - TZ=${TZ:-Asia/Shanghai}
     volumes:
-      - ./config.yaml:/config/config.yaml:ro     # 配置文件，只读
-      - /path/to/photos:/data                    # 照片存储目录
-      - icloud_cookies:/config/cookies           # Cookie 持久化
+      - ./config.yaml:/config/config.yaml:ro     # Configuration file, read-only
+      - /path/to/photos:/data                    # Photo storage directory
+      - icloud_cookies:/config/cookies           # Cookie persistence
     healthcheck:
       test: ["CMD", "/bin/bash", "/app/healthcheck.sh"]
       interval: 300s

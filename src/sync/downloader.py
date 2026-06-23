@@ -206,7 +206,7 @@ class Downloader:
         Args:
             target_path: Destination path (used to determine filesystem).
 
-        Logs a warning if space is low. Follows the "按需报错" assumption
+        Logs a warning if space is low. Follows the "report on demand" assumption
         from the spec.
         """
         try:

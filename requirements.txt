@@ -1,11 +1,11 @@
-# 核心依赖：直接从本地子模块安装
+# Core dependencies: install directly from local submodule
 -e libs/icloud_photos_downloader
 
-# 其他依赖
+# Other dependencies
 python-telegram-bot>=20.0
 PyYAML>=6.0
 
-# 开发/测试（不包含在 Docker 镜像中）
+# Development/Testing (not included in Docker image)
 pytest>=7.0
 pytest-cov>=4.0
 pytest-mock>=3.0

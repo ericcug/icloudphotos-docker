@@ -1,24 +1,24 @@
 FROM python:3.11-slim AS builder
 
-# 构建参数：icloud_photos_downloader 仓库与分支
+# Build arguments: icloud_photos_downloader repository and branch
 ARG ICLOUDPD_REPO=https://github.com/ericcug/icloud_photos_downloader.git
 ARG ICLOUDPD_REF=master
 
-# 安装构建期工具 + 创建虚拟环境 + 安装所有依赖（单层合并）
+# Install build tools + create virtual environment + install all dependencies (single layer merge)
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/* \
     && python -m venv /opt/venv
 
 ENV PATH="/opt/venv/bin:$PATH"
 
-# 从 Git 拉取并安装 icloud_photos_downloader + 运行时依赖（合并为一层）
+# Clone from Git and install icloud_photos_downloader + runtime dependencies (merged into one layer)
 RUN git clone --depth 1 --branch "${ICLOUDPD_REF}" "${ICLOUDPD_REPO}" /tmp/icloudpd_src \
     && pip install --no-cache-dir --no-compile \
         /tmp/icloudpd_src \
         "python-telegram-bot>=20.0" \
         "PyYAML>=6.0" \
     && rm -rf /tmp/icloudpd_src \
-    # 清理运行时不需要的文件
+    # Clean up files not needed at runtime
     && find /opt/venv -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null; \
        find /opt/venv -name "*.pyc" -o -name "*.pyo" | xargs rm -f 2>/dev/null; \
        find /opt/venv -type d -name "tests" -exec rm -rf {} + 2>/dev/null; \
@@ -27,26 +27,26 @@ RUN git clone --depth 1 --branch "${ICLOUDPD_REF}" "${ICLOUDPD_REPO}" /tmp/iclou
        find /opt/venv -type d -name "docs" -exec rm -rf {} + 2>/dev/null; \
        true
 
-# --- 最终运行镜像（Alpine） ---
+# --- Final runtime image (Alpine) ---
 FROM python:3.11-alpine
 
-# 安装最小运行时依赖
+# Install minimal runtime dependencies
 RUN apk add --no-cache bash libffi
 
-# 创建非 root 用户
+# Create non-root user
 RUN addgroup -g 1000 icloud && \
     adduser -u 1000 -G icloud -D -s /bin/bash icloud
 
-# 从 builder 阶段复制虚拟环境
+# Copy virtual environment from builder stage
 COPY --from=builder /opt/venv /opt/venv
-# 启用虚拟环境
+# Enable virtual environment
 ENV PATH="/opt/venv/bin:$PATH"
 
-# 创建运行时目录
+# Create runtime directories
 RUN mkdir -p /config /data /tmp/icloudpd && \
     chown -R icloud:icloud /config /data /tmp/icloudpd
 
-# 复制源码
+# Copy source code
 COPY src/ /app/src/
 COPY config/entrypoint.sh /app/entrypoint.sh
 COPY config/healthcheck.sh /app/healthcheck.sh

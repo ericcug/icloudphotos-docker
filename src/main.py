@@ -7,7 +7,7 @@ and orchestrates the startup sequence of all subsystems.
 import sys
 from pathlib import Path
 
-# 添加本地 icloud_photos_downloader 库路径
+# Add local icloud_photos_downloader library path
 _libs_path = Path(__file__).resolve().parent.parent.parent / "libs" / "icloud_photos_downloader" / "src"
 if _libs_path.exists():
     sys.path.insert(0, str(_libs_path))
