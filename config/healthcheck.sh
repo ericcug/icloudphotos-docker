@@ -6,6 +6,13 @@ set -e
 
 COOKIE_DIR="${COOKIE_DIR:-/config/cookies}"
 EXIT_CODE_FILE="/tmp/icloudpd/icloudpd_exit_code"
+WAITING_AUTH_FILE="/tmp/icloudpd/waiting_for_auth"
+
+# If deliberately waiting for re-authentication, report healthy
+if [ -f "$WAITING_AUTH_FILE" ]; then
+    echo "Waiting for re-authentication..."
+    exit 0
+fi
 
 # Check if exit code file exists
 if [ -f "$EXIT_CODE_FILE" ]; then

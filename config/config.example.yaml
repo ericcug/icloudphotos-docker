@@ -32,7 +32,19 @@ auth_china: false
 
 # === Cookies and Auth ===
 notification_days: 7                # Notify N days before cookie expires
+wait_for_reauthentication: true      # Hold container and keep Telegram active on auth failure instead of restarting
+reauth_notification_interval: null   # Reminder interval when waiting for re-authentication (default: download_interval)
 cookie_dir: "/config/cookies"       # Cookie persistence directory
+
+# === Metadata Sidecar ===
+xmp_sidecar: false                   # Generate Adobe .xmp metadata sidecar alongside downloaded assets
+
+# === Cloud Retention ===
+keep_icloud_recent_days: null        # Only keep photos within last N days in iCloud (null = disabled)
+keep_icloud_recent_only: false       # Safety confirmation required to enable keep_icloud_recent_days
+
+# === Safety & Pre-flight ===
+min_free_disk_bytes: 1073741824      # Minimum free disk bytes on download volume (default: 1GB)
 
 # === Notification Configuration ===
 notification:

@@ -98,6 +98,20 @@ class Config:
     # Cookie expiry notification (docker-icloudpd: notification_days)
     notification_days: int = 7
 
+    # Re-authentication hold state
+    wait_for_reauthentication: bool = True
+    reauth_notification_interval: Optional[int] = None
+
+    # Metadata sidecar
+    xmp_sidecar: bool = False
+
+    # iCloud retention policy
+    keep_icloud_recent_days: Optional[int] = None
+    keep_icloud_recent_only: bool = False
+
+    # Safety checks
+    min_free_disk_bytes: int = 1073741824  # 1GB
+
     # Subsystems
     notification: NotificationConfig = field(default_factory=NotificationConfig)
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
@@ -154,6 +168,12 @@ ENV_VAR_MAP = {
     "ICLOUD_AUTH_CHINA": "auth_china",
     "ICLOUD_LOG_LEVEL": "log_level",
     "ICLOUD_NOTIFICATION_DAYS": "notification_days",
+    "ICLOUD_WAIT_FOR_REAUTHENTICATION": "wait_for_reauthentication",
+    "ICLOUD_REAUTH_NOTIFICATION_INTERVAL": "reauth_notification_interval",
+    "ICLOUD_XMP_SIDECAR": "xmp_sidecar",
+    "ICLOUD_KEEP_ICLOUD_RECENT_DAYS": "keep_icloud_recent_days",
+    "ICLOUD_KEEP_ICLOUD_RECENT_ONLY": "keep_icloud_recent_only",
+    "ICLOUD_MIN_FREE_DISK_BYTES": "min_free_disk_bytes",
     "ICLOUD_TELEGRAM_ENABLED": "notification.telegram.enabled",
     "ICLOUD_TELEGRAM_TOKEN": "notification.telegram.bot_token",
     "ICLOUD_TELEGRAM_CHAT_ID": "notification.telegram.chat_id",

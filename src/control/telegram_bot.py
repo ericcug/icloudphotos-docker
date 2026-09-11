@@ -137,9 +137,11 @@ class TelegramController:
         if not text:
             return
 
+        # Normalize parts by trimming whitespace
+        parts = [p.strip() for p in text.split() if p.strip()]
+
         # Detect 6-digit MFA code → feed to MFA provider (like docker-icloudpd)
         # Supports both plain "123456" and "username 123456" formats
-        parts = text.split()
         for part in parts:
             if len(part) == 6 and part.isdigit():
                 if self.mfa_provider:
@@ -148,8 +150,7 @@ class TelegramController:
                     self._send_reply("✅ MFA code received. Authenticating...")
                     return
 
-        # Detect single letter SMS device choice (a-z), but only when MFA is
-        # actively waiting for input (to avoid false positives from normal messages)
+        # Detect single letter SMS device choice (a-z), tolerating case and mobile keyboards
         if len(parts) >= 1 and len(parts[-1]) == 1 and parts[-1].isalpha():
             choice = parts[-1].lower()
             if self.mfa_provider and not self.mfa_provider._code_event.is_set():
@@ -158,8 +159,16 @@ class TelegramController:
                 self._send_reply(f"📱 Sending SMS to device '{choice}'...")
                 return
 
-        # Check for commands
-        cmd = text.lower().split()[0] if text else ""
+        # Check for commands (supports /reauth, /sync, /pause, /resume, /status as well as "auth", "<user> auth")
+        normalized_text = text.strip().lower()
+        if normalized_text == "auth" or normalized_text.endswith(" auth"):
+            self.request_reauth()
+            return
+        if normalized_text == "sync" or normalized_text.endswith(" sync"):
+            self.sync_now()
+            return
+
+        cmd = parts[0].lower() if parts else ""
         handler_name = self.COMMANDS.get(cmd)
 
         if handler_name:
@@ -238,6 +247,15 @@ class TelegramController:
             # Update the sync engine's wrapper with the fresh service
             if self.engine:
                 self.engine.wrapper.service = new_service
+                from sync.engine import SyncState
+                if self.engine.state == SyncState.WAITING_FOR_AUTH:
+                    self.engine.state = SyncState.IDLE
+
+            from pathlib import Path
+            waiting_marker = Path("/tmp/icloudpd/waiting_for_auth")
+            if waiting_marker.exists():
+                waiting_marker.unlink(missing_ok=True)
+
             self._send_reply("✅ Re-authentication successful. Cookies refreshed.")
             logger.info("Re-authentication completed via /reauth command")
         except Exception as e:

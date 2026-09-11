@@ -88,6 +88,12 @@ You can configure the application using either a `config.yaml` file mounted to `
 | `ICLOUD_AUTH_CHINA` | `auth_china` | Set to `true` to use China auth servers | `false` |
 | `ICLOUD_LOG_LEVEL` | `log_level` | Application log level (`debug`, `info`, `warning`, `error`) | `info` |
 | `ICLOUD_NOTIFICATION_DAYS` | `notification_days` | Days before cookie expiry to notify | `7` |
+| `ICLOUD_WAIT_FOR_REAUTHENTICATION` | `wait_for_reauthentication` | Hold container alive and keep Telegram active during auth failure | `true` |
+| `ICLOUD_REAUTH_NOTIFICATION_INTERVAL` | `reauth_notification_interval` | Reminder interval when waiting for re-authentication (seconds) | `download_interval` |
+| `ICLOUD_XMP_SIDECAR` | `xmp_sidecar` | Write Adobe `.xmp` sidecar alongside downloaded photos | `false` |
+| `ICLOUD_KEEP_ICLOUD_RECENT_DAYS` | `keep_icloud_recent_days` | Only keep photos within last *N* days in iCloud | |
+| `ICLOUD_KEEP_ICLOUD_RECENT_ONLY` | `keep_icloud_recent_only` | Safety toggle required to activate `keep_icloud_recent_days` | `false` |
+| `ICLOUD_MIN_FREE_DISK_BYTES` | `min_free_disk_bytes` | Minimum free disk space in bytes before skipping download | `1073741824` (1GB) |
 
 ### Notification Settings
 

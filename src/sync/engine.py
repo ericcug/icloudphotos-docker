@@ -6,11 +6,13 @@ backoff per the spec (FR-011).
 """
 
 import logging
+import os
 import shutil
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from enum import Enum
+from pathlib import Path
 from typing import Dict, Optional
 
 from notify.bus import EventType, SystemEvent
@@ -18,7 +20,19 @@ from sync.differ import AssetDiff, MetadataDiffer
 from sync.downloader import Downloader
 from sync.icloud_wrapper import ICloudWrapper
 
+# Import pyicloud auth exceptions for precise error matching
+try:
+    from pyicloud_ipd.exceptions import (
+        PyiCloudAPIResponseException,
+        PyiCloudFailedLoginException,
+    )
+    _AUTH_EXCEPTIONS = (PyiCloudAPIResponseException, PyiCloudFailedLoginException)
+except ImportError:
+    _AUTH_EXCEPTIONS = ()
+
 logger = logging.getLogger(__name__)
+
+WAITING_FOR_AUTH_MARKER = Path("/tmp/icloudpd/waiting_for_auth")
 
 
 class SyncState(Enum):
@@ -28,6 +42,7 @@ class SyncState(Enum):
     DOWNLOADING = "downloading"
     PROCESSING = "processing"
     WAITING = "waiting"
+    WAITING_FOR_AUTH = "waiting_for_auth"
     PAUSED = "paused"
     FAILED = "failed"
 
@@ -77,6 +92,7 @@ class SyncEngine:
             retry_interval=config.retry_interval,
             retry_count=config.retry_count,
             download_resolution=config.download_resolution,
+            xmp_sidecar=getattr(config, "xmp_sidecar", False),
         )
         self.state = SyncState.IDLE
         self.task: Optional[dict] = None
@@ -143,6 +159,12 @@ class SyncEngine:
                 # Check cookie expiry before every cycle
                 self._check_cookie_expiry()
 
+                if self.state == SyncState.WAITING_FOR_AUTH:
+                    if getattr(self.config, "wait_for_reauthentication", True):
+                        self._wait_for_reauth()
+                    else:
+                        break
+
                 self._check_pause()
                 if self.state == SyncState.PAUSED:
                     # Block until resumed instead of busy-waiting
@@ -162,6 +184,24 @@ class SyncEngine:
                 self._wait_interval()
 
             except Exception as e:
+                is_auth_error = isinstance(e, _AUTH_EXCEPTIONS)
+                if not is_auth_error:
+                    # Fallback: check HTTP status codes in exception message
+                    err_str = str(e)
+                    is_auth_error = any(
+                        code in err_str for code in ("401", "421", "403")
+                    ) and ("HTTP" in err_str or "status" in err_str.lower())
+
+                if is_auth_error and getattr(self.config, "wait_for_reauthentication", True):
+                    logger.warning(
+                        "Authentication error in sync cycle: %s. Holding for re-authentication.",
+                        e,
+                    )
+                    self._wait_for_reauth()
+                    if once:
+                        return {"error": "Authentication required", "state": self.state.value}
+                    continue
+
                 logger.error("Sync cycle failed: %s", e, exc_info=True)
                 recovery_attempt += 1
 
@@ -221,6 +261,12 @@ class SyncEngine:
 
         if download_count == 0 and delete_count == 0:
             logger.info("No new, modified, or remotely deleted assets to process")
+            self.state = SyncState.IDLE
+            return self._build_summary(start_time, 0, 0, total_cloud=total_cloud)
+
+        # Pre-flight disk space check (docker-icloudpd preflight check)
+        if not self._check_preflight_disk():
+            logger.warning("Pre-flight disk check failed. Skipping download.")
             self.state = SyncState.IDLE
             return self._build_summary(start_time, 0, 0, total_cloud=total_cloud)
 
@@ -317,6 +363,28 @@ class SyncEngine:
                     "Progress: %d/%d downloaded, %d failed",
                     processed, download_count, failed,
                 )
+
+        # Phase 5b: Cloud retention policy (keep_icloud_recent_days)
+        days = getattr(self.config, "keep_icloud_recent_days", None)
+        keep_only = getattr(self.config, "keep_icloud_recent_only", False)
+        if isinstance(days, int) and not isinstance(days, bool) and days > 0:
+            if not keep_only:
+                logger.warning(
+                    "keep_icloud_recent_days is set (%d), but keep_icloud_recent_only is False. "
+                    "Skipping retention cleanup (requires double confirmation).",
+                    days,
+                )
+            else:
+                max_del = getattr(self.config, "max_deletions_per_run", 100)
+                max_del_val = max_del if isinstance(max_del, int) and not isinstance(max_del, bool) else 100
+                max_del_remain = max_del_val - deleted_count
+                if max_del_remain > 0:
+                    retention_deleted = self._apply_cloud_retention(
+                        cloud_assets=cloud_assets,
+                        asset_map=asset_map,
+                        max_deletions=max_del_remain,
+                    )
+                    deleted_count += retention_deleted
 
         # Publish detailed completion notification
         if self._event_bus:
@@ -537,10 +605,12 @@ class SyncEngine:
                         severity="error",
                         message=(
                             f"Cookie expired at: {expire_date}. "
-                            f"Please reinitialise authentication."
+                            f"Please reinitialise authentication (send /reauth in Telegram)."
                         ),
                         details={"days_remaining": details.days_remaining},
                     ))
+                if getattr(self.config, "wait_for_reauthentication", True):
+                    self.state = SyncState.WAITING_FOR_AUTH
             elif details.days_remaining <= notification_days:
                 # Cookie expiring soon
                 if self._event_bus:
@@ -562,6 +632,220 @@ class SyncEngine:
                     ))
         except Exception as e:
             logger.warning("Cookie expiry check failed: %s", e)
+
+    def _check_preflight_disk(self) -> bool:
+        """Check available space on /config and download_path before syncing."""
+        # Check /config (needs >= 1MB for cookies/db)
+        config_dir = getattr(self.config, "cookie_dir", None)
+        if isinstance(config_dir, (str, Path)):
+            try:
+                config_path = Path(config_dir)
+                target_cfg = config_path if config_path.exists() else config_path.parent
+                if target_cfg.exists():
+                    stat_cfg = os.statvfs(target_cfg)
+                    free_cfg = stat_cfg.f_frsize * stat_cfg.f_bavail
+                    if free_cfg < 1048576:  # 1MB
+                        logger.error("Critically low space on config volume: %d bytes (min 1MB required)", free_cfg)
+                        if self._event_bus:
+                            self._event_bus.publish(SystemEvent(
+                                event_type=EventType.LOW_SPACE,
+                                severity="error",
+                                message=f"Critically low space on config volume: {self._format_size(free_cfg)} available (1MB required)",
+                            ))
+                        return False
+            except Exception as e:
+                logger.debug("Could not statvfs for config dir: %s", e)
+
+        # Check download_path (needs >= min_free_disk_bytes, default 1GB)
+        dl_dir = getattr(self.config, "download_path", None)
+        min_dl_bytes = getattr(self.config, "min_free_disk_bytes", 1073741824)
+        if not isinstance(min_dl_bytes, int) or isinstance(min_dl_bytes, bool):
+            min_dl_bytes = 1073741824
+
+        if isinstance(dl_dir, (str, Path)):
+            try:
+                dl_path = Path(dl_dir)
+                target_check = dl_path if dl_path.exists() else dl_path.parent
+                if target_check.exists():
+                    stat_dl = os.statvfs(target_check)
+                    free_dl = stat_dl.f_frsize * stat_dl.f_bavail
+                    if free_dl < min_dl_bytes:
+                        logger.error(
+                            "Insufficient space on download volume: %d bytes (min %d bytes required)",
+                            free_dl, min_dl_bytes,
+                        )
+                        if self._event_bus:
+                            self._event_bus.publish(SystemEvent(
+                                event_type=EventType.LOW_SPACE,
+                                severity="error",
+                                message=f"Low disk space on download path: {self._format_size(free_dl)} available ({self._format_size(min_dl_bytes)} required)",
+                            ))
+                        return False
+            except Exception as e:
+                logger.debug("Could not statvfs for download dir: %s", e)
+
+        return True
+
+    def _apply_cloud_retention(
+        self,
+        cloud_assets: list,
+        asset_map: Dict[str, object],
+        max_deletions: int,
+    ) -> int:
+        """Apply cloud retention policy: delete assets older than keep_icloud_recent_days.
+
+        Args:
+            cloud_assets: List of asset metadata dicts.
+            asset_map: Map of record_name to PhotoAsset.
+            max_deletions: Maximum number of deletions allowed in this pass.
+
+        Returns:
+            Number of assets deleted from iCloud.
+        """
+        days = getattr(self.config, "keep_icloud_recent_days", None)
+        keep_only = getattr(self.config, "keep_icloud_recent_only", False)
+        if not isinstance(days, int) or isinstance(days, bool) or days <= 0 or not keep_only:
+            return 0
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        deleted = 0
+
+        for meta in cloud_assets:
+            if deleted >= max_deletions:
+                logger.info("Max deletions limit reached during cloud retention cleanup (%d)", max_deletions)
+                break
+
+            record_name = meta.get("record_name")
+            asset = asset_map.get(record_name)
+            if not asset:
+                continue
+
+            asset_dt = getattr(asset, "created", None)
+            if not asset_dt:
+                created_str = meta.get("created_at")
+                if created_str:
+                    try:
+                        asset_dt = datetime.fromisoformat(str(created_str))
+                    except Exception:
+                        pass
+
+            if not asset_dt:
+                continue
+
+            if asset_dt.tzinfo is None:
+                asset_dt = asset_dt.replace(tzinfo=timezone.utc)
+
+            if asset_dt < cutoff:
+                logger.info(
+                    "Asset %s (%s) is older than %d days (cutoff: %s) -> deleting from iCloud",
+                    meta.get("filename"), asset_dt.isoformat(), days, cutoff.isoformat(),
+                )
+                if self.wrapper.delete_asset(asset):
+                    deleted += 1
+                    if self.config.download_delay > 0:
+                        time.sleep(self.config.download_delay)
+
+        return deleted
+
+    def _wait_for_reauth(self) -> None:
+        """Hold the engine in waiting_for_auth state until re-authenticated.
+
+        Creates the marker file for Docker healthcheck, sends periodic
+        reminders, and blocks until authentication is restored.
+        Delegates to the shared wait_for_auth_restoration() method.
+        """
+        logger.warning("Entering re-authentication hold state...")
+        self.state = SyncState.WAITING_FOR_AUTH
+
+        WAITING_FOR_AUTH_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        WAITING_FOR_AUTH_MARKER.touch(exist_ok=True)
+
+        def _state_check():
+            """Return True when external code (e.g. /reauth) has reset state."""
+            return self.state != SyncState.WAITING_FOR_AUTH
+
+        try:
+            restored = SyncEngine.wait_for_auth_restoration(
+                auth_manager=self._auth_manager,
+                config=self.config,
+                event_bus=self._event_bus,
+                cancel_check=_state_check,
+            )
+            if restored:
+                logger.info("Authentication restored! Resuming normal sync.")
+            self.state = SyncState.IDLE
+        finally:
+            if WAITING_FOR_AUTH_MARKER.exists():
+                WAITING_FOR_AUTH_MARKER.unlink(missing_ok=True)
+
+    @staticmethod
+    def wait_for_auth_restoration(
+        auth_manager,
+        config,
+        event_bus=None,
+        shutdown_event=None,
+        cancel_check=None,
+    ) -> bool:
+        """Block until authentication is restored or shutdown is requested.
+
+        Shared by both startup auth failure (main.py) and runtime cookie
+        expiry (engine._wait_for_reauth).
+
+        Args:
+            auth_manager: AuthManager to poll for cookie validity.
+            config: Config for apple_id, download_interval, etc.
+            event_bus: Optional EventBus for publishing AUTH_EXPIRED events.
+            shutdown_event: Optional threading.Event; when set, abort wait.
+            cancel_check: Optional callable returning True to abort wait
+                (used by engine when /reauth resets state externally).
+
+        Returns:
+            True if auth restored, False if shutdown/cancel requested.
+        """
+        remind_interval = getattr(config, "reauth_notification_interval", None)
+        if not remind_interval or (isinstance(remind_interval, int) and remind_interval < 10):
+            remind_interval = config.download_interval
+
+        msg = (
+            f"⚠️ Authentication required for Apple ID: {config.apple_id}\n"
+            f"Please send /reauth in Telegram to restore sync."
+        )
+
+        while True:
+            # Check cancel condition before each reminder cycle
+            if cancel_check and cancel_check():
+                return True
+
+            if event_bus:
+                event_bus.publish(SystemEvent(
+                    event_type=EventType.AUTH_EXPIRED,
+                    severity="error",
+                    message=msg,
+                ))
+
+            # Poll for auth restoration (check every 2 seconds)
+            elapsed = 0
+            while elapsed < remind_interval:
+                # Check for shutdown request (SIGTERM)
+                if shutdown_event is not None:
+                    if shutdown_event.wait(timeout=2):
+                        return False
+                else:
+                    time.sleep(2)
+                elapsed += 2
+
+                # Check external cancel (e.g. /reauth changed engine state)
+                if cancel_check and cancel_check():
+                    return True
+
+                # Check if auth manager says cookie is now valid
+                if auth_manager:
+                    try:
+                        details = auth_manager.check_cookie_expiry()
+                        if details.days_remaining is not None and details.days_remaining >= 1:
+                            return True
+                    except Exception:
+                        pass
 
     def _wait_interval(self) -> None:
         """Wait for the next sync interval, checking for pause/resume."""

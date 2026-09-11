@@ -164,12 +164,58 @@ def main() -> None:
         service = auth_manager.authenticate(password)
     except Exception as e:
         logger.error("Authentication failed: %s", e)
-        logger.error("Check your Apple ID and password.")
-        if telegram_ctrl.enabled:
-            telegram_ctrl.stop()
-        if telegram_service:
-            telegram_service.stop()
-        sys.exit(1)
+        if getattr(config, "wait_for_reauthentication", True):
+            logger.warning("wait_for_reauthentication is enabled. Holding container open for authentication...")
+            from sync.engine import WAITING_FOR_AUTH_MARKER, SyncEngine
+            WAITING_FOR_AUTH_MARKER.parent.mkdir(parents=True, exist_ok=True)
+            WAITING_FOR_AUTH_MARKER.touch(exist_ok=True)
+
+            if telegram_service and tg_config.chat_id:
+                telegram_service.send_message(
+                    chat_id=tg_config.chat_id,
+                    text=f"⚠️ Authentication required on startup for Apple ID: {config.apple_id}\nPlease send /reauth in Telegram to authenticate.",
+                )
+
+            # Use threading.Event so SIGTERM can interrupt the wait
+            import threading as _threading
+            _shutdown_event = _threading.Event()
+
+            _orig_sigterm = signal.getsignal(signal.SIGTERM)
+            def _shutdown_handler(signum, frame):
+                _shutdown_event.set()
+                if callable(_orig_sigterm) and _orig_sigterm not in (signal.SIG_DFL, signal.SIG_IGN):
+                    _orig_sigterm(signum, frame)
+            signal.signal(signal.SIGTERM, _shutdown_handler)
+
+            try:
+                restored = SyncEngine.wait_for_auth_restoration(
+                    auth_manager=auth_manager,
+                    config=config,
+                    shutdown_event=_shutdown_event,
+                )
+            except KeyboardInterrupt:
+                restored = False
+
+            if WAITING_FOR_AUTH_MARKER.exists():
+                WAITING_FOR_AUTH_MARKER.unlink(missing_ok=True)
+
+            if restored:
+                service = auth_manager.authenticate(password)
+                logger.info("Authentication completed! Resuming startup sequence.")
+            else:
+                logger.info("Shutdown requested during authentication wait.")
+                if telegram_ctrl.enabled:
+                    telegram_ctrl.stop()
+                if telegram_service:
+                    telegram_service.stop()
+                sys.exit(0)
+        else:
+            logger.error("Check your Apple ID and password.")
+            if telegram_ctrl.enabled:
+                telegram_ctrl.stop()
+            if telegram_service:
+                telegram_service.stop()
+            sys.exit(1)
 
     # Sync engine
     wrapper = ICloudWrapper(service)

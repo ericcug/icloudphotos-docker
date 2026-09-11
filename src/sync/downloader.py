@@ -40,6 +40,7 @@ class Downloader:
         retry_interval: int = 120,
         retry_count: int = 3,
         download_resolution: str = "unmodified",
+        xmp_sidecar: bool = False,
     ):
         """Initialize downloader.
 
@@ -49,12 +50,14 @@ class Downloader:
             retry_interval: Wait time before retry in seconds.
             retry_count: Max number of retries per file.
             download_resolution: Resolution to download (unmodified, high_res, compatible).
+            xmp_sidecar: Whether to generate .xmp sidecar metadata file.
         """
         self.wrapper = wrapper
         self.download_delay = download_delay
         self.retry_interval = retry_interval
         self.retry_count = retry_count
         self.download_resolution = download_resolution
+        self.xmp_sidecar = xmp_sidecar
         self.current_delay = download_delay
         self.stats = {"downloaded": 0, "failed": 0, "skipped": 0, "total_bytes": 0}
 
@@ -187,6 +190,21 @@ class Downloader:
             )
 
             if success:
+                if self.xmp_sidecar:
+                    try:
+                        from icloudpd.xmp_sidecar import generate_xmp_file
+                        asset_rec = getattr(asset, "_asset_record", None)
+                        if asset_rec:
+                            generate_xmp_file(
+                                logger=logging.getLogger("icloudpd"),
+                                download_path=str(target_path),
+                                asset_record=asset_rec,
+                                dry_run=False,
+                            )
+                            logger.debug("Generated XMP sidecar for %s", target_path.name)
+                    except Exception as sidecar_err:
+                        logger.warning("Failed to generate XMP sidecar for %s: %s", target_path.name, sidecar_err)
+
                 return target_path
             else:
                 logger.error("download_media failed for %s", asset.filename)
