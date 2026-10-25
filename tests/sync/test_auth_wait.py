@@ -51,11 +51,12 @@ class TestAuthErrorDetection:
 
         mock_wait.assert_called_once()
 
+    @patch("time.sleep", return_value=None)
     @patch.object(SyncEngine, "_wait_for_reauth")
     @patch.object(SyncEngine, "_execute_cycle")
     @patch.object(SyncEngine, "_check_cookie_expiry")
     def test_generic_exception_does_not_trigger_reauth(
-        self, mock_check, mock_execute, mock_wait
+        self, mock_check, mock_execute, mock_wait, mock_sleep
     ):
         """A generic ValueError should NOT trigger reauth wait."""
         mock_execute.side_effect = ValueError("Something went wrong with path /data/401/photos")
@@ -80,11 +81,12 @@ class TestAuthErrorDetection:
 
         mock_wait.assert_called_once()
 
+    @patch("time.sleep", return_value=None)
     @patch.object(SyncEngine, "_wait_for_reauth")
     @patch.object(SyncEngine, "_execute_cycle")
     @patch.object(SyncEngine, "_check_cookie_expiry")
     def test_plain_401_in_path_does_not_trigger_reauth(
-        self, mock_check, mock_execute, mock_wait
+        self, mock_check, mock_execute, mock_wait, mock_sleep
     ):
         """'401' appearing in a file path (without HTTP context) should NOT trigger reauth."""
         mock_execute.side_effect = FileNotFoundError("File not found: /data/room401/photo.jpg")

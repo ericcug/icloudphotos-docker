@@ -85,13 +85,17 @@ class MetadataDiffer:
         for asset in cloud_assets:
             record_name = asset["record_name"]
             
-            # Determine lookup key based on file match policy
-            if self.file_match_policy == "name":
-                target_path = self.get_target_path(asset)
-                rel_path = target_path.relative_to(self.download_path)
-                lookup_key = rel_path.with_suffix('').as_posix()
-            else:
+            target_path = self.get_target_path(asset)
+            rel_path = target_path.relative_to(self.download_path)
+            path_key = rel_path.with_suffix('').as_posix()
+
+            # Support both path_key (from _build_local_index) and record_name (if custom index passed)
+            if path_key in local_index:
+                lookup_key = path_key
+            elif record_name in local_index:
                 lookup_key = record_name
+            else:
+                lookup_key = path_key if self.file_match_policy == "name" else record_name
                 
             cloud_lookup_keys.add(lookup_key)
             local_path = local_index.get(lookup_key)
@@ -142,15 +146,15 @@ class MetadataDiffer:
             return index
 
         for root, _, files in os.walk(self.download_path):
+            if ".trash" in Path(root).parts:
+                continue
             for filename in files:
+                if filename.endswith(".xmp") or filename.endswith(".part"):
+                    continue
                 filepath = Path(root) / filename
-                # Simple name-based matching (can be extended for checksum)
-                if self.file_match_policy == "name":
-                    # Use relative path sans extension as record key to include date folders
-                    rel_path = filepath.relative_to(self.download_path)
-                    key = rel_path.with_suffix('').as_posix()
-                    index[key] = filepath
-                # Future: size/checksum matching
+                rel_path = filepath.relative_to(self.download_path)
+                key = rel_path.with_suffix('').as_posix()
+                index[key] = filepath
 
         return index
 

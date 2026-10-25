@@ -27,6 +27,7 @@ class TelegramNotifier:
         "complete": "✅",
         "error": "❌",
         "auth_expired": "⚠️",
+        "cookie_expiring": "⏳",
         "low_space": "💾",
         "rate_limited": "🐌",
         "sync_paused": "⏸️",

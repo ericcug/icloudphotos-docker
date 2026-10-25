@@ -16,12 +16,14 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Cookie header patterns (from docker-icloudpd sync-icloud.sh)
-# MFA cookie: X-APPLE-WEBAUTH-USER → expires="2026-06-20T12:34:56Z"; HttpOnly
-# Web cookie: X_APPLE_WEB_KB → expires="2026-06-20T12:34:56Z"; HttpOnly
+# Cookie header patterns (from docker-icloudpd sync-icloud.sh & LWPCookieJar)
+# MFA cookie: X-APPLE-WEBAUTH-USER / X-APPLE-WEBAUTH-HSA-TRUST → expires="2026-06-20 12:34:56Z"
+# Web cookie: X_APPLE_WEB_KB → expires="2026-06-20 12:34:56Z"
 # Trust header: X-APPLE-WEBAUTH-HSA-TRUST (present = MFA authenticated)
-_EXPIRY_PATTERN = re.compile(r'expires="([^"]+?)Z?";\s*HttpOnly', re.IGNORECASE)
+_EXPIRY_PATTERN = re.compile(r'expires="([^"]+?)"', re.IGNORECASE)
 _MFA_USER_LINE = re.compile(r'^.*X-APPLE-WEBAUTH-USER.*$', re.MULTILINE)
+_MFA_TRUST_LINE = re.compile(r'^.*X-APPLE-WEBAUTH-HSA-TRUST.*$', re.MULTILINE)
+_SESSION_TOKEN_LINE = re.compile(r'^.*X-APPLE-DS-WEB-SESSION-TOKEN.*$', re.MULTILINE)
 _WEB_KB_LINE = re.compile(r'^.*X_APPLE_WEB_KB.*$', re.MULTILINE)
 _HSA_TRUST = "X-APPLE-WEBAUTH-HSA-TRUST"
 _SESSION_TOKEN = "X-APPLE-DS-WEB-SESSION-TOKEN"
@@ -149,9 +151,9 @@ class CookieStore:
         match = _EXPIRY_PATTERN.search(line)
         if not match:
             return None
-        expire_str = match.group(1).strip()
+        expire_str = match.group(1).strip().rstrip("Zz")
         # Try common iCloud date formats
-        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%SZ"):
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
             try:
                 return datetime.strptime(expire_str, fmt).replace(tzinfo=timezone.utc)
             except ValueError:
@@ -183,10 +185,14 @@ class CookieStore:
         info.has_mfa_trust = _HSA_TRUST in content
         info.has_session_token = _SESSION_TOKEN in content
 
-        # Parse MFA cookie expiry (X-APPLE-WEBAUTH-USER)
-        mfa_match = _MFA_USER_LINE.search(content)
-        if mfa_match:
-            info.mfa_expire_date = self._parse_expiry_from_line(mfa_match.group(0))
+        # Parse MFA cookie expiry (prefer X-APPLE-WEBAUTH-USER, fallback to SESSION-TOKEN / HSA-TRUST)
+        for pattern in (_MFA_USER_LINE, _SESSION_TOKEN_LINE, _MFA_TRUST_LINE):
+            mfa_match = pattern.search(content)
+            if mfa_match:
+                parsed = self._parse_expiry_from_line(mfa_match.group(0))
+                if parsed is not None:
+                    info.mfa_expire_date = parsed
+                    break
 
         # Parse web cookie expiry (X_APPLE_WEB_KB)
         web_match = _WEB_KB_LINE.search(content)

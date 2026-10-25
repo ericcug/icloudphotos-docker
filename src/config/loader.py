@@ -9,6 +9,7 @@ import yaml
 
 from config.schema import (
     VALID_DELETE_POLICIES,
+    VALID_DOWNLOAD_RESOLUTIONS,
     VALID_FILE_MATCH_POLICIES,
     VALID_FILE_PERMISSIONS,
     VALID_FOLDER_STRUCTURES,
@@ -187,7 +188,10 @@ def _build_config(raw: Dict[str, Any], password: Optional[str], config_path: Pat
             method=wh_raw.get("method", "POST"),
             headers=wh_raw.get("headers", {}),
         ),
-        events=notif_raw.get("events", ["start", "complete", "error"]),
+        events=notif_raw.get("events", [
+            "start", "complete", "error", "auth_expired", "cookie_expiring",
+            "low_space", "rate_limited", "sync_paused", "sync_resumed"
+        ]),
     )
 
     # Pipeline
@@ -267,6 +271,11 @@ def _validate(config: Config) -> None:
     if config.file_match_policy not in VALID_FILE_MATCH_POLICIES:
         errors.append(
             f"file_match_policy '{config.file_match_policy}' must be one of {VALID_FILE_MATCH_POLICIES}"
+        )
+
+    if config.download_resolution not in VALID_DOWNLOAD_RESOLUTIONS:
+        errors.append(
+            f"download_resolution '{config.download_resolution}' must be one of {VALID_DOWNLOAD_RESOLUTIONS}"
         )
 
     if config.log_level not in VALID_LOG_LEVELS:

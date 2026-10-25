@@ -90,6 +90,21 @@ class TestAuthManager:
         assert mock_pyicloud.call_count == 2
 
     @patch("auth.session.PyiCloudService")
+    def test_authenticate_session_reuse_network_error_preserves_cookie(
+        self, mock_pyicloud, auth_manager, mock_cookie_store
+    ):
+        """Network error during session reuse MUST NOT delete existing cookies."""
+        from pyicloud_ipd.exceptions import PyiCloudConnectionErrorException
+
+        mock_cookie_store.validate_session.return_value = True
+        mock_pyicloud.side_effect = PyiCloudConnectionErrorException("Connection reset by peer")
+
+        with pytest.raises(PyiCloudConnectionErrorException):
+            auth_manager.authenticate("password123", force_refresh=False)
+
+        mock_cookie_store.delete_cookie.assert_not_called()
+
+    @patch("auth.session.PyiCloudService")
     def test_authenticate_force_refresh(self, mock_pyicloud, auth_manager, mock_cookie_store):
         """Test force_refresh skips reuse attempt and deletes cookies immediately."""
         mock_service = MagicMock()

@@ -53,12 +53,13 @@ class PasswordFormatter(logging.Formatter):
     replaces the sensitive value portion with [REDACTED].
     """
 
-    SENSITIVE_FIELDS = {"password", "bot_token", "apple_id", "token", "secret", "key"}
+    SENSITIVE_FIELDS = {"password", "bot_token", "token", "secret", "key"}
 
     # Pattern matches: field_name followed by separator (=, :, space) then the value
     _REDACT_RE = re.compile(
         r'(?i)\b(' + '|'.join(re.escape(f) for f in SENSITIVE_FIELDS) + r')'
         r'([\s=:]+)'
+        r'(?!(?:present|expired|valid|invalid|found|missing|sent|received|required|verified)\b)'
         r'(\S+)',
     )
 

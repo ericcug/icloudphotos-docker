@@ -58,6 +58,8 @@ class TestTelegramNotifier:
         assert isinstance(notifier.EVENT_EMOJI, dict)
         assert "start" in notifier.EVENT_EMOJI
         assert "error" in notifier.EVENT_EMOJI
+        assert "cookie_expiring" in notifier.EVENT_EMOJI
+        assert "auth_expired" in notifier.EVENT_EMOJI
 
 
 class TestWebhookNotifier:

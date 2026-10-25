@@ -120,16 +120,51 @@ def main() -> None:
 
     # Shared Telegram Bot service (connection pooling)
     from notify.channels.telegram_service import TelegramService
+    from notify.bus import EventBus
+    from notify.channels.telegram import TelegramNotifier
+    from notify.channels.webhook import WebhookNotifier
 
     telegram_service = None
     tg_config = config.notification.telegram
     if tg_config.bot_token and tg_config.chat_id:
         telegram_service = TelegramService(bot_token=tg_config.bot_token)
-        try:
-            telegram_service.start()
-        except Exception as e:
-            logger.warning("Failed to start TelegramService: %s (continuing without)", e)
-            telegram_service = None
+        import time as _time
+        for _attempt in range(1, 4):
+            try:
+                telegram_service.start()
+                break
+            except Exception as e:
+                if _attempt < 3:
+                    logger.warning(
+                        "Failed to start TelegramService (attempt %d/3): %s — retrying in 5s...",
+                        _attempt, e,
+                    )
+                    _time.sleep(5)
+                else:
+                    logger.warning("Failed to start TelegramService after 3 attempts: %s (continuing without)", e)
+                    telegram_service = None
+
+    # Phase 5 (US3): Event bus + notification channels (Initialized early so startup auth events are delivered)
+    event_bus = EventBus(subscribed_events=config.notification.events)
+
+    if (tg_config.enabled or (tg_config.bot_token and tg_config.chat_id)) and telegram_service:
+        tg_notifier = TelegramNotifier(
+            service=telegram_service,
+            chat_id=tg_config.chat_id,
+        )
+        for etype in ["start", "complete", "error", "auth_expired", "cookie_expiring", "low_space", "rate_limited", "sync_paused", "sync_resumed"]:
+            event_bus.subscribe(etype, tg_notifier.send)
+        logger.info("Telegram notifications enabled")
+
+    if config.notification.webhook.enabled:
+        wh_notifier = WebhookNotifier(
+            url=config.notification.webhook.url,
+            method=config.notification.webhook.method,
+            headers=config.notification.webhook.headers,
+        )
+        for etype in ["start", "complete", "error", "auth_expired", "cookie_expiring", "low_space", "rate_limited", "sync_paused", "sync_resumed"]:
+            event_bus.subscribe(etype, wh_notifier.send)
+        logger.info("Webhook notifications enabled")
 
     # Auth subsystem
     cookie_store = CookieStore(cookie_dir=config.cookie_dir)
@@ -164,17 +199,24 @@ def main() -> None:
         service = auth_manager.authenticate(password)
     except Exception as e:
         logger.error("Authentication failed: %s", e)
-        if getattr(config, "wait_for_reauthentication", True):
+        import requests.exceptions as _req_exc
+        try:
+            from pyicloud_ipd.exceptions import PyiCloudConnectionErrorException as _ConnExc
+            _conn_types = (_ConnExc, _req_exc.RequestException, ConnectionError)
+        except ImportError:
+            _conn_types = (_req_exc.RequestException, ConnectionError)
+
+        is_network_err = isinstance(e, _conn_types)
+        can_wait_reauth = (
+            getattr(config, "wait_for_reauthentication", True)
+            and not is_network_err
+            and telegram_ctrl.enabled
+        )
+        if can_wait_reauth:
             logger.warning("wait_for_reauthentication is enabled. Holding container open for authentication...")
             from sync.engine import WAITING_FOR_AUTH_MARKER, SyncEngine
             WAITING_FOR_AUTH_MARKER.parent.mkdir(parents=True, exist_ok=True)
             WAITING_FOR_AUTH_MARKER.touch(exist_ok=True)
-
-            if telegram_service and tg_config.chat_id:
-                telegram_service.send_message(
-                    chat_id=tg_config.chat_id,
-                    text=f"⚠️ Authentication required on startup for Apple ID: {config.apple_id}\nPlease send /reauth in Telegram to authenticate.",
-                )
 
             # Use threading.Event so SIGTERM can interrupt the wait
             import threading as _threading
@@ -191,7 +233,9 @@ def main() -> None:
                 restored = SyncEngine.wait_for_auth_restoration(
                     auth_manager=auth_manager,
                     config=config,
+                    event_bus=event_bus,
                     shutdown_event=_shutdown_event,
+                    cancel_check=lambda: auth_manager.service is not None,
                 )
             except KeyboardInterrupt:
                 restored = False
@@ -200,7 +244,7 @@ def main() -> None:
                 WAITING_FOR_AUTH_MARKER.unlink(missing_ok=True)
 
             if restored:
-                service = auth_manager.authenticate(password)
+                service = auth_manager.service or auth_manager.authenticate(password)
                 logger.info("Authentication completed! Resuming startup sequence.")
             else:
                 logger.info("Shutdown requested during authentication wait.")
@@ -210,7 +254,12 @@ def main() -> None:
                     telegram_service.stop()
                 sys.exit(0)
         else:
-            logger.error("Check your Apple ID and password.")
+            if is_network_err:
+                logger.error("Network error during startup authentication — exiting so container can retry.")
+            elif not telegram_ctrl.enabled:
+                logger.error("Telegram remote control is unavailable — cannot wait for interactive re-authentication.")
+            else:
+                logger.error("Check your Apple ID and password.")
             if telegram_ctrl.enabled:
                 telegram_ctrl.stop()
             if telegram_service:
@@ -221,6 +270,7 @@ def main() -> None:
     wrapper = ICloudWrapper(service)
     engine = SyncEngine(config, wrapper)
     engine.set_auth_manager(auth_manager)
+    engine.set_event_bus(event_bus)
     telegram_ctrl.engine = engine  # Attach engine to controller
 
     # Phase 4 (US2): Pipeline runner
@@ -229,33 +279,6 @@ def main() -> None:
     if not pipeline_runner.is_empty:
         engine.set_pipeline_runner(pipeline_runner)
         logger.info("Pipeline runner loaded (%d steps)", len(pipeline_runner.steps))
-
-    # Phase 5 (US3): Event bus + notification channels
-    from notify.bus import EventBus
-    from notify.channels.telegram import TelegramNotifier
-    from notify.channels.webhook import WebhookNotifier
-
-    event_bus = EventBus(subscribed_events=config.notification.events)
-    engine.set_event_bus(event_bus)
-
-    if tg_config.enabled and telegram_service:
-        tg_notifier = TelegramNotifier(
-            service=telegram_service,
-            chat_id=tg_config.chat_id,
-        )
-        for etype in ["start", "complete", "error", "auth_expired", "cookie_expiring", "low_space", "rate_limited", "sync_paused", "sync_resumed"]:
-            event_bus.subscribe(etype, tg_notifier.send)
-        logger.info("Telegram notifications enabled")
-
-    if config.notification.webhook.enabled:
-        wh_notifier = WebhookNotifier(
-            url=config.notification.webhook.url,
-            method=config.notification.webhook.method,
-            headers=config.notification.webhook.headers,
-        )
-        for etype in ["start", "complete", "error", "auth_expired", "cookie_expiring", "low_space", "rate_limited"]:
-            event_bus.subscribe(etype, wh_notifier.send)
-        logger.info("Webhook notifications enabled")
 
     if not telegram_ctrl.enabled:
         # File-based fallback

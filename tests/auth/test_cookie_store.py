@@ -162,3 +162,18 @@ class TestCookieStore:
         cookie_store.save_cookie(apple_id, NO_EXPIRY_COOKIE)
         
         assert cookie_store.validate_session(apple_id) is True
+
+    def test_get_expiry_details_lwp_format_without_httponly_or_mfa_user(self, cookie_store):
+        """Test parsing real LWPCookieJar format with HttpOnly=None and HSA-TRUST fallback."""
+        lwp_cookie = '''#LWP-Cookies-2.0
+Set-Cookie3: X-APPLE-WEBAUTH-HSA-TRUST="trust"; path="/"; domain=".icloud.com"; expires="2026-11-24 12:46:02Z"; version=0
+Set-Cookie3: X_APPLE_WEB_KB-ABC="kb"; path="/"; domain=".icloud.com"; expires="2026-12-24 12:45:40Z"; HttpOnly=None; version=0
+'''
+        apple_id = "test@example.com"
+        cookie_store.save_cookie(apple_id, lwp_cookie)
+
+        details = cookie_store.get_expiry_details(apple_id)
+        assert details.exists is True
+        assert details.has_mfa_trust is True
+        assert details.mfa_expire_date == datetime(2026, 11, 24, 12, 46, 2, tzinfo=timezone.utc)
+        assert details.web_expire_date == datetime(2026, 12, 24, 12, 45, 40, tzinfo=timezone.utc)

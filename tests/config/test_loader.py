@@ -69,6 +69,8 @@ class TestLoadConfig:
         assert config.download_interval == 86400
         assert config.file_permissions == "644"
         assert config.delete_policy == "keep"
+        assert "cookie_expiring" in config.notification.events
+        assert "auth_expired" in config.notification.events
 
     def test_file_not_found(self, tmp_path):
         with pytest.raises(FileNotFoundError):

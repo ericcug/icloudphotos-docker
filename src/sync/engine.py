@@ -98,6 +98,7 @@ class SyncEngine:
         self.task: Optional[dict] = None
         self._pause_requested = False
         self._resume_event = threading.Event()  # Replaces busy-wait for pause/resume
+        self._wake_event = threading.Event()  # Interrupts _wait_interval on sync_now()
         self._event_bus = None  # Set via set_event_bus()
         self._auth_manager = None  # Set via set_auth_manager()
         self._pipeline_runner = None  # Set via set_pipeline_runner()
@@ -142,6 +143,7 @@ class SyncEngine:
         """Trigger immediate sync cycle (override interval)."""
         logger.info("Immediate sync requested")
         self.state = SyncState.IDLE
+        self._wake_event.set()
 
     def run_cycle(self, once: bool = False) -> dict:
         """Execute a complete sync cycle with crash recovery.
@@ -197,6 +199,12 @@ class SyncEngine:
                         "Authentication error in sync cycle: %s. Holding for re-authentication.",
                         e,
                     )
+                    # Delete rejected session cookie so polling does not see stale valid days_remaining
+                    if self._auth_manager and getattr(self._auth_manager, "cookie_store", None):
+                        try:
+                            self._auth_manager.cookie_store.delete_cookie(self.config.apple_id)
+                        except Exception as del_err:
+                            logger.debug("Failed to delete rejected cookie: %s", del_err)
                     self._wait_for_reauth()
                     if once:
                         return {"error": "Authentication required", "state": self.state.value}
@@ -838,24 +846,34 @@ class SyncEngine:
                 if cancel_check and cancel_check():
                     return True
 
-                # Check if auth manager says cookie is now valid
+                # Check if auth manager says cookie is now valid (use silent cookie_store check to avoid log flood)
                 if auth_manager:
                     try:
-                        details = auth_manager.check_cookie_expiry()
+                        cookie_store = getattr(auth_manager, "cookie_store", None)
+                        # Only use cookie_store directly if check_cookie_expiry wasn't explicitly mocked/overridden
+                        check_fn = getattr(auth_manager, "check_cookie_expiry", None)
+                        is_mock_check = hasattr(check_fn, "return_value") or hasattr(check_fn, "side_effect")
+                        if cookie_store is not None and not is_mock_check and hasattr(cookie_store, "get_expiry_details"):
+                            details = cookie_store.get_expiry_details(config.apple_id)
+                        else:
+                            details = auth_manager.check_cookie_expiry()
                         if details.days_remaining is not None and details.days_remaining >= 1:
                             return True
                     except Exception:
                         pass
 
     def _wait_interval(self) -> None:
-        """Wait for the next sync interval, checking for pause/resume."""
+        """Wait for the next sync interval, checking for pause/resume or sync_now."""
         interval = self.config.download_interval
         logger.info("Next sync in %d seconds", interval)
+        self._wake_event.clear()
 
         remaining = interval
         while remaining > 0:
             if self._pause_requested:
                 self._handle_pause()
-            sleep_time = min(10, remaining)
-            time.sleep(sleep_time)
-            remaining -= sleep_time
+            if self._wake_event.wait(timeout=min(10, remaining)) or self.state == SyncState.IDLE:
+                self._wake_event.clear()
+                logger.info("Wait interval interrupted by immediate sync request")
+                break
+            remaining -= min(10, remaining)

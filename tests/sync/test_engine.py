@@ -215,3 +215,22 @@ class TestSyncEngine:
         mock_bus.publish.assert_called_once()
         event = mock_bus.publish.call_args[0][0]
         assert event.event_type == EventType.AUTH_EXPIRED
+
+    def test_sync_now_interrupts_wait_interval(self, engine):
+        """Test sync_now sets wake_event and interrupts _wait_interval immediately."""
+        engine.config.download_interval = 3600
+        engine.state = SyncState.WAITING
+
+        def trigger_sync():
+            time.sleep(0.05)
+            engine.sync_now()
+
+        t = threading.Thread(target=trigger_sync, daemon=True)
+        t.start()
+
+        start = time.monotonic()
+        engine._wait_interval()
+        elapsed = time.monotonic() - start
+
+        assert elapsed < 15
+        assert engine.state == SyncState.IDLE

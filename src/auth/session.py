@@ -10,10 +10,12 @@ from typing import List, Optional
 
 from pyicloud_ipd.base import PyiCloudService
 from pyicloud_ipd.exceptions import (
+    PyiCloudConnectionErrorException,
     PyiCloudFailedLoginException,
     PyiCloudFailedMFAException,
 )
 from pyicloud_ipd.sms import TrustedDevice
+import requests.exceptions
 
 from auth.cookie_store import CookieStore
 from auth.mfa import TelegramMFAProvider
@@ -80,7 +82,7 @@ class AuthManager:
         cookie_dir = str(self.config.cookie_dir)
         self.cookie_store.cookie_dir.mkdir(parents=True, exist_ok=True)
 
-        domain = "cn" if self.config.auth_china else "com"
+        domain = "cn" if (self.config.auth_china or getattr(self.config, "icloud_china", False)) else "com"
 
         # Try to reuse existing cookies if they are valid and not force-refreshing.
         if not force_refresh and self.cookie_store.validate_session(self.config.apple_id):
@@ -106,6 +108,17 @@ class AuthManager:
                     "— falling back to full login",
                     icloud.requires_2fa, icloud.requires_2sa,
                 )
+            except (
+                PyiCloudConnectionErrorException,
+                requests.exceptions.RequestException,
+                ConnectionError,
+                TimeoutError,
+            ) as conn_err:
+                logger.error(
+                    "Network error while reusing session (cookies preserved): %s",
+                    conn_err,
+                )
+                raise
             except Exception as e:
                 logger.warning(
                     "Session reuse failed with error: %s — falling back to full login", e

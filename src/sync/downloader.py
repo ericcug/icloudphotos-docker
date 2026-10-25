@@ -14,6 +14,15 @@ from typing import Optional
 
 from pyicloud_ipd.services.photos import PhotoAsset
 
+try:
+    from pyicloud_ipd.exceptions import (
+        PyiCloudAPIResponseException,
+        PyiCloudFailedLoginException,
+    )
+    _AUTH_EXCEPTIONS = (PyiCloudAPIResponseException, PyiCloudFailedLoginException)
+except ImportError:
+    _AUTH_EXCEPTIONS = ()
+
 logger = logging.getLogger(__name__)
 
 
@@ -110,6 +119,16 @@ class Downloader:
                 continue
 
             except Exception as e:
+                is_auth_error = isinstance(e, _AUTH_EXCEPTIONS)
+                if not is_auth_error:
+                    err_str = str(e)
+                    is_auth_error = any(
+                        code in err_str for code in ("401", "421", "403")
+                    ) and ("HTTP" in err_str or "status" in err_str.lower() or "Authentication required" in err_str)
+                if is_auth_error:
+                    logger.warning("Authentication error during download of %s: %s", asset.filename, e)
+                    raise
+
                 logger.error("Download failed (attempt %d/%d): %s — %s",
                              attempt, self.retry_count, asset.filename, e)
                 if attempt < self.retry_count:
